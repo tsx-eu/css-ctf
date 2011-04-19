@@ -26,60 +26,52 @@ stock CTF_DropFlag(client, thrown=false) {
 	if( iFlagType == -1 )
 		return;
 	
+	AcceptEntityInput(g_iFlags_Entity[iFlagType], "ClearParent");
 	g_fLastDrop[client] = GetGameTime();
 	
-	new Float:vecFlag[3], Float:vecNull[3];
-	GetEntPropVector(client, Prop_Send, "m_vecOrigin", vecFlag);
-	
-	vecFlag[2] += 10.0;
-	
-	TeleportEntity(g_iFlags_Physics[iFlagType], vecFlag, vecNull, NULL_VECTOR);
-	
-	new String:ParentName[128];
-	Format(ParentName, sizeof(ParentName), "ctf_drop_%i", GetRandomInt(11111, 99999) );
-	DispatchKeyValue(g_iFlags_Physics[iFlagType], "targetname", ParentName);
-	//
-	SetVariantString(ParentName);
-	AcceptEntityInput(g_iFlags_Entity[iFlagType], "SetParent");
-	
-	vecFlag[0] = 0.0;
-	vecFlag[1] = 0.0;
-	vecFlag[2] = 0.0;
-	
-	TeleportEntity(g_iFlags_Entity[iFlagType], vecFlag, vecFlag, NULL_VECTOR);
-	AcceptEntityInput(g_iFlags_Physics[iFlagType], "EnableMotion");
-	
-	if( thrown ) {
-		
-		new Handle:dp;
-		CreateDataTimer( 0.1, CTF_DropFlag_Task, dp); 
-		WritePackCell(dp, client);
-		WritePackCell(dp, iFlagType);
-	}
-}
-public Action:CTF_DropFlag_Task(Handle:timer, Handle:dp) {
-	
-	ResetPack(dp);
-	new client = ReadPackCell(dp);
-	new iFlagType = ReadPackCell(dp);
-	
-	AcceptEntityInput(g_iFlags_Physics[iFlagType], "EnableMotion");
-	
 	new Float:vecOrigin[3], Float:vecAngles[3], Float:vecPush[3], Float:vecNull[3];
-	
 	GetClientEyePosition(client, vecOrigin);
 	GetClientEyeAngles(client, vecAngles);
 	
-	vecAngles[0] += 10.0;
+	if( thrown ) {
+		
+		vecOrigin[0] = (vecOrigin[0] + (60.0 * Cosine( degrees_to_radians( vecAngles[1] ) ) ) );
+		vecOrigin[1] = (vecOrigin[1] + (60.0 * Sine( degrees_to_radians( vecAngles[1] ) ) ) );
+		vecOrigin[2] = (vecOrigin[2] - 20.0);
+		
+		vecPush[0] = ( FLAG_SPEED * Cosine( degrees_to_radians(vecAngles[1]) ) );
+		vecPush[1] = ( FLAG_SPEED * Sine( degrees_to_radians(vecAngles[1]) ) );
+		vecPush[2] = ( (FLAG_SPEED/4.0) * Sine( degrees_to_radians(vecAngles[0]) ) );
+	}
+	else {
+		
+		vecOrigin[2] = (vecOrigin[2] - 20.0);
+		vecPush[2] = 20.0;
+	}
 	
-	vecOrigin[0] = (vecOrigin[0] + (50.0 * Cosine( degrees_to_radians( vecAngles[1] ) ) ) );
-	vecOrigin[1] = (vecOrigin[1] + (50.0 * Sine( degrees_to_radians( vecAngles[1] ) ) ) );
-	vecOrigin[2] = (vecOrigin[2] + 1.0);
+	SetEntProp(g_iFlags_Entity[iFlagType], Prop_Send, "m_fFlags", 0);
+	SetEntProp(g_iFlags_Entity[iFlagType], Prop_Send, "m_flSimulationTime", 0);
+	SetEntProp(g_iFlags_Entity[iFlagType], Prop_Send, "movecollide", 2);
 	
-	GetAngleVectors(vecAngles, vecPush, NULL_VECTOR, NULL_VECTOR);
-	ScaleVector(vecPush, 1000.0);
+	SetEntityMoveType(g_iFlags_Entity[iFlagType], MOVETYPE_FLYGRAVITY);
+	SetEntProp(g_iFlags_Entity[iFlagType], Prop_Send, "m_CollisionGroup", COLLISION_GROUP_DEBRIS);
+	SetEntPropFloat(g_iFlags_Entity[iFlagType], Prop_Send, "m_flElasticity", 0.1);
 	
-	TeleportEntity(g_iFlags_Physics[iFlagType], vecOrigin, vecNull, vecPush);
+	TeleportEntity(g_iFlags_Entity[iFlagType], vecOrigin, vecNull, vecPush);
+	
+	g_fFlags_Respawn[iFlagType] = (GetGameTime() + 30.0);
+	
+	for(new i=1; i<=GetMaxClients(); i++) {
+		if( !IsValidClient(i) ) 
+			continue;
+		
+		if( iFlagType == 1 ) {
+			ClientCommand(i, "play \"DeadlyDesire/ctf/BlueFlagDropped.mp3\"");
+		}
+		else if( iFlagType == 0 ) {
+			ClientCommand(i, "play \"DeadlyDesire/ctf/RedFlagDropped.mp3\"");
+		}
+	}
 }
 // ------------------------------------------------------------------------------------------------------------------
 // Utilisé pour spawn/respawn un drapeau
@@ -93,35 +85,13 @@ public CTF_SpawnFlag(Flag_Type) {
 			AcceptEntityInput(g_iFlags_Entity[Flag_Type], "KillHierarchy");
 		}
 	}
-	if( g_iFlags_Base[Flag_Type] > 1 && IsValidEdict(g_iFlags_Base[Flag_Type]) && IsValidEntity(g_iFlags_Base[Flag_Type]) ) {
-		
-		new String:classname[128];
-		GetEdictClassname(g_iFlags_Base[Flag_Type], classname, 127);
-		if( StrEqual(classname, "ctf_base", false) ) {
-			AcceptEntityInput(g_iFlags_Base[Flag_Type], "KillHierarchy");
-		}
-	}
-	if( g_iFlags_Physics[Flag_Type] > 1 && IsValidEdict(g_iFlags_Physics[Flag_Type]) && IsValidEntity(g_iFlags_Physics[Flag_Type]) ) {
-		
-		new String:classname[128];
-		GetEdictClassname(g_iFlags_Physics[Flag_Type], classname, 127);
-		if( StrEqual(classname, "ctf_flag_physics", false) ) {
-			AcceptEntityInput(g_iFlags_Physics[Flag_Type], "KillHierarchy");
-		}
-	}
 	
 	g_iFlags_Entity[Flag_Type] = 0;
-	g_iFlags_Physics[Flag_Type] = 0;
 	g_iFlags_Carrier[Flag_Type] = 0;
+	g_fFlags_Respawn[Flag_Type] = -1.0;
 	
-	new ent0 = CreateEntityByName("prop_physics");
-	if( !IsValidEdict(ent0) )
-		return;
-	new ent1 = CreateEntityByName("prop_dynamic");
+	new ent1 = CreateEntityByName("flashbang_projectile");
 	if( !IsValidEdict(ent1) )
-		return;
-	new ent2 = CreateEntityByName("prop_dynamic");
-	if( !IsValidEdict(ent2) )
 		return;
 	new ent3 = CreateEntityByName("light_dynamic");
 	if( !IsValidEdict(ent3) )
@@ -130,19 +100,9 @@ public CTF_SpawnFlag(Flag_Type) {
 	if( !IsValidEdict(ent4) )
 		return;
 	
-	SetEntityModel(ent0, "models/props/cs_assault/barrelwarning.mdl");
-	DispatchKeyValue(ent0, "disableshadows", "1");
-	DispatchKeyValue(ent0, "nodamageforces", "1");
-	DispatchKeyValue(ent0, "solid", "0");
-	DispatchKeyValue(ent0, "spawnflags", "6");
 	//
-	SetEntityModel(ent1, "models/DeadlyDesire/ctf/flag.mdl");
-	DispatchKeyValue(ent1, "solid", "0");
 	DispatchKeyValue(ent1, "classname", "ctf_flag");
 	//
-	SetEntityModel(ent2, "models/DeadlyDesire/ctf/cap_point_base.mdl");
-	DispatchKeyValue(ent2, "solid", "5");
-	DispatchKeyValue(ent2, "classname", "ctf_base");
 	//
 	DispatchKeyValue(ent3, "brightness", "3");
 	DispatchKeyValue(ent3, "distance", "128");
@@ -156,51 +116,39 @@ public CTF_SpawnFlag(Flag_Type) {
 	
 	if( Flag_Type == 0 ) {
 		DispatchKeyValue(ent1, "Skin", "0");
-		DispatchKeyValue(ent2, "Skin", "1");
 		DispatchKeyValue(ent3, "_light", "255 0 0");
 		DispatchKeyValue(ent4, "rendercolor", "250 0 0");
 	}
 	else if( Flag_Type == 1 ) {
 		DispatchKeyValue(ent1, "Skin", "1");
-		DispatchKeyValue(ent2, "Skin", "2");
 		DispatchKeyValue(ent3, "_light", "0 0 255");
 		DispatchKeyValue(ent4, "rendercolor", "0 0 250");
 	}
 	else {
 		DispatchKeyValue(ent1, "Skin", "2");
-		DispatchKeyValue(ent2, "Skin", "0");
 		DispatchKeyValue(ent4, "rendercolor", "10 10 10");
 	}
 	
-	DispatchSpawn(ent0);
 	DispatchSpawn(ent1);
-	DispatchSpawn(ent2);
 	DispatchSpawn(ent3);
 	DispatchSpawn(ent4);
 	
+	SetEntityModel(ent1, "models/DeadlyDesire/ctf/flag.mdl");
+	SetEntityMoveType(ent1, MOVETYPE_FLYGRAVITY);
+	SetEntProp(ent1, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_DEBRIS);
+	SetEntPropFloat(ent1, Prop_Send, "m_flElasticity", 0.1);
+	
 	g_vecFlags[Flag_Type][2] += 10.0;
-	TeleportEntity(ent0, g_vecFlags[Flag_Type], NULL_VECTOR, NULL_VECTOR);
 	TeleportEntity(ent1, g_vecFlags[Flag_Type], NULL_VECTOR, NULL_VECTOR);
-	g_vecFlags[Flag_Type][2] -= 10.0;
-	TeleportEntity(ent2, g_vecFlags[Flag_Type], NULL_VECTOR, NULL_VECTOR);
-	g_vecFlags[Flag_Type][2] += 10.0;
 	TeleportEntity(ent3, g_vecFlags[Flag_Type], NULL_VECTOR, NULL_VECTOR);
 	g_vecFlags[Flag_Type][2] -= 10.0;
 	TeleportEntity(ent4, g_vecFlags[Flag_Type], NULL_VECTOR, NULL_VECTOR);
 	
-	g_iFlags_Physics[Flag_Type] = ent0;
 	g_iFlags_Entity[Flag_Type] = ent1;
-	g_iFlags_Base[Flag_Type] = ent2;
-	
+	//
+	//
 	new String:ParentName[128];
-	Format(ParentName, sizeof(ParentName), "ctf_physics_%i%i%i%i", ent0, ent1, Flag_Type, GetRandomInt(11111, 99999) );
-	DispatchKeyValue(ent0, "targetname", ParentName);
-	//
-	SetVariantString(ParentName);
-	AcceptEntityInput(ent1, "SetParent");
-	//
-	//
-	Format(ParentName, sizeof(ParentName), "ctf_parent_%i%i%i%i", ent0, ent1, Flag_Type, GetRandomInt(11111, 99999) );
+	Format(ParentName, sizeof(ParentName), "ctf_parent_%i%i%i%i", ent1, ent3, Flag_Type, GetRandomInt(11111, 99999) );
 	DispatchKeyValue(ent1, "targetname", ParentName);	
 	//
 	SetVariantString(ParentName);
@@ -208,10 +156,6 @@ public CTF_SpawnFlag(Flag_Type) {
 	//
 	SetVariantString(ParentName);
 	AcceptEntityInput(ent4, "SetParent");
-	
-	AcceptEntityInput(ent0, "DisableMotion");
-	AcceptEntityInput(ent0, "DisablePuntSound");
-	Colorize(ent0, 255, 255, 255, 0);
 }
 // ------------------------------------------------------------------------------------------------------------------
 //	Utilisé lorsqu'un joueur marche sur son capture point avec un drapeau ennemi. Augmente le score, et fait gagné l'équipe si besoin est.
@@ -324,6 +268,7 @@ public CTF_FlagTouched(toucher, flag, Flag_Type) {
 	TeleportEntity(flag, pos, ang, NULL_VECTOR);
 	
 	g_iFlags_Carrier[Flag_Type] = toucher;
+	g_fFlags_Respawn[Flag_Type] = -1.0;
 	
 	for(new i=1; i<=GetMaxClients(); i++) {
 		if( !IsValidClient(i) ) 
@@ -350,49 +295,28 @@ public CTF_FixAngles() {
 	for(new Flag_Type = 0; Flag_Type<=2; Flag_Type++) {
 		if( g_iFlags_Entity[Flag_Type] > 1 && IsValidEdict(g_iFlags_Entity[Flag_Type]) && IsValidEntity(g_iFlags_Entity[Flag_Type]) ) {
 			
-			CTF_FixAngle(g_iFlags_Physics[Flag_Type]);
+			if( IsValidClient(g_iFlags_Carrier[Flag_Type]) )
+				continue;
+			
+			new Float:vecAngles[3];
+			TeleportEntity(g_iFlags_Entity[Flag_Type], NULL_VECTOR, vecAngles, NULL_VECTOR);
 		}
 	}
-}
-public CTF_FixAngle(ent) {
-	new Float:fOrigin[3], Float:fAngle[3], Float:vecDest[3], Float:vecVelocity[3];
-	
-	GetEntPropVector(ent, Prop_Send, "m_vecOrigin", fOrigin);
-	
-	
-	fAngle[0] = 90.0;
-	fAngle[1] = 90.0;
-	fAngle[2] = 0.0;
-	
-	vecVelocity[0] = 0.0;
-	vecVelocity[1] = 0.0;
-	vecVelocity[2] = -250.0;
-	
-	new Handle:trace = TR_TraceRayFilterEx(fOrigin, fAngle, MASK_NPCWORLDSTATIC, RayType_Infinite, FilterToOne, ent);
-	TR_GetEndPosition(vecDest, trace);
-	GetEntPropVector(ent, Prop_Data, "m_angRotation", fAngle);
-	fAngle[0] = 0.0;
-	TeleportEntity(ent, NULL_VECTOR, fAngle, vecVelocity);
-	
-	if( !IsValidClient(TR_GetEntityIndex(trace)) && GetVectorDistance(fOrigin, vecDest) <= 20.0 ) {
-		
-		AcceptEntityInput(ent, "DisableMotion");
-	}
-	
-	CloseHandle(trace);
 }
 stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index) {
 	
 	new Float:vecStart[3], Float:PlayerVec[3], Float:distance, Float:falloff = (damage/lenght), entity_to_ignore = -1;
 	
-	for(new i=1; i<=GetMaxClients(); i++) {
-		
-		if( !IsValidClient(i) )
+	for(new i=1; i<=GetMaxEntities(); i++) {
+		if( !IsValidEdict(i) )
 			continue;
-		if( !IsPlayerAlive(i) ) 
+		if( !IsValidEntity(i) )
+			continue;
+		if( !IsMoveAble(i) && !IsValidSentry(i) )
 			continue;
 		
-		GetClientAbsOrigin(i, PlayerVec);
+		GetEntPropVector(i, Prop_Send, "m_vecOrigin", PlayerVec);
+		
 		vecStart[0] = origin[0];
 		vecStart[1] = origin[1];
 		vecStart[2] = origin[2];
@@ -416,11 +340,15 @@ stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index) {
 		if( dmg < 0.0 )
 			continue;
 		
-		if( i == index || GetClientTeam(i) == GetClientTeam(index) )
-			dmg *= 0.25;
+		if( IsValidClient(i) ) {
+			if( i == index || GetClientTeam(i) == GetClientTeam(index) )
+				dmg *= 0.25;
+		}
 		
 		DealDamage(i, RoundFloat(dmg), index);
 	}
+	
+	ULTI_TraceDecal(origin, g_cScorch);
 	
 	origin[2] -= 10.0;
 	MakeRadiusPush(origin, lenght, (damage * 10.0));
@@ -588,4 +516,30 @@ public BeepC4(index) {
 }
 public Action:RemoveBeepC4(Handle:Timer, any:ent) {
 	AcceptEntityInput(ent, "Kill");
+}
+
+public ULTI_TraceDecal(Float:vecOrigin[3], decal) {
+	
+	new Float:vecOrigin2[3];
+	new Float:vecAngles[3]; vecAngles[0] = -90.0;
+	
+	new Handle:trace = TR_TraceRayEx( vecOrigin, vecAngles, MASK_SOLID_BRUSHONLY, RayType_Infinite);
+	if( TR_DidHit( trace ) ) {
+		
+		TR_GetEndPosition( vecOrigin2, trace );
+		
+		new index = TR_GetEntityIndex( trace );
+		
+		if( GetVectorDistance(vecOrigin, vecOrigin2) <= 100.0 ) {
+			
+			if( index > 0 ) {
+				TE_SetupBSPDecal(vecOrigin2, index, decal);
+				TE_SendToAll();
+			}
+		}
+	}
+	CloseHandle( trace );
+	
+	TE_SetupBSPDecal(vecOrigin2, 0, decal);
+	TE_SendToAll();
 }

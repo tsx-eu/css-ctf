@@ -11,6 +11,7 @@
 #include <cstrike>
 #include <phun>
 #include <smlib>
+//#include <tentdev>
 
 public Plugin:myinfo = {
 	name = "CTF",
@@ -20,13 +21,15 @@ public Plugin:myinfo = {
 	url = "http://www.ts-x.eu/"
 }
 
+// ------------------------------
+// Enum
+//
 enum enum_flag_type {
 	flag_red = 0,
 	flag_blue,
 	flag_neutral,
 	flag_max
 };
-
 enum enum_class_type {
 	class_none = 0,
 	class_scout,
@@ -41,72 +44,149 @@ enum enum_class_type {
 	class_civilian,
 	class_max
 }
-
-new Handle:g_hBDD = INVALID_HANDLE;
-new String:g_szError[1024];
-
-new Float:g_vecFlags[flag_max][3];
+enum enum_grenade_type {
+	grenade_none,
+	grenade_caltrop,
+	grenade_concussion,
+	grenade_frag,
+	grenade_nail,
+	grenade_mirv,
+	grenade_mirvlet,
+	grenade_napalm,
+	grenade_gas,
+	grenade_emp,
+	
+	grenade_max
+}
+// ------------------------------
+// FLAGS
+//
 new g_iFlags_Entity[flag_max];
-new g_iFlags_Base[flag_max];
 new g_iFlags_Carrier[flag_max];
-new g_iFlags_Physics[flag_max];
-
+new Float:g_vecFlags[flag_max][3];
+new Float:g_fFlags_Respawn[flag_max];
+// ------------------------------
+// SECU
+//
 new g_iSecu_Status[flag_max];
-
-new Float:g_fCapMins[3] = { -80.0, -80.0, 0.0 };
-new Float:g_fCapMaxs[3] = { 80.0, 80.0, 80.0 };
-
+// ------------------------------
+// SCORES
+//
 new g_iScore[2];
-
+// ------------------------------
+// PLAYER
+//
 new g_iLastTeam[65];
 new g_iRevieveTime[65];
-new Float:g_fLastDrop[65];
-
-new enum_class_type:g_iPlayerClass[65];
 new g_iPlayerArmor[65];
+new enum_class_type:g_iPlayerClass[65];
+new Float:g_fLastDrop[65];
 new Float:g_fUlti_Cooldown[65];
+// ------------------------------
+// Grenade
+//
+new g_iPlayerGrenadeAmount[65][2];
+new Float:g_flPrimedTime[2048];
+new enum_grenade_type:g_iGrenadeType[2048];
+new Float:g_flNailData[2048][2];
+new Float:g_flGasLastDamage[65];
 
-new bool:g_bIsCustomWeapon[2049];
+
+// ------------------------------
+// CUSTOM WEAPON
+//
 new g_iCustomWeapon_Entity[65][2];
 new g_iCustomWeapon_Entity2[65][3];
-new Float:g_fCustomWeapon_NextShoot[65][3];
 new g_iCustomWeapon_Ammo[65][2];
-
+new bool:g_bIsCustomWeapon[2049];
+new Float:g_fCustomWeapon_NextShoot[65][3];
+// ------------------------------
+// OFFSET
+//
 new g_iOffset_armor = -1;
 new g_iOffset_WeaponParent = -1;
-
+new g_iOffset_money = -1;
+// ------------------------------
+// SDK-CALL HANDLE
+//
 new Handle:g_hConfig = INVALID_HANDLE;
 new Handle:g_hPosition = INVALID_HANDLE;
-
+// ------------------------------
+// PRECACHE
+//
 new g_cPhysicBeam;
+new g_cShockWave;
+new g_cShockWave2;
 new g_cSmokeBeam;
 new g_cExplode;
-
+new g_cScorch;
+// ------------------------------
+// Class: Artificier
+//
 new Float:g_C4_fExplodeTime[2048];
 new Float:g_C4_fNextBeep[2048];
 new bool:g_C4_bIsActive[2048];
+// ------------------------------
+// Class: Medic
+//
+new g_iContaminated[65];
+new Float:g_fContaminate[65];
+#define HEAL_DIST		300.0
+// ------------------------------
+// Class: Pyroman
+//
+new g_iBurning[65];
+new Float:g_fBurning[65];
+// ------------------------------
+// Class: Espion
+//
+new Float:g_fDelay[65][2];
+new Float:g_fRestoreSpeed[65][2];
+// ------------------------------
+// Class: Ingenieur
+//
+new g_iSentry[65];
+new Float:g_flSentryHealth[2048];
+new Float:g_flSentryThink[2048];
+new Float:g_flMetal[65];
 
-#define CUSTOM_WEAPON	"weapon_tmp"
+// ------------------------------
+// CTF-CONFIG
+//
+#define FLAG_SPEED		500.0
+// ------------------------------
+// ULTIMATE-CONFIG
+//
 #define ULTI_COOLDOWN	12.0
 #define ULTI_DURATION	10.0
 
+
+// ------------------------------
+// DO NOT EDIT BELLOW!
+//
 #define WALL_FACTOR		1.25
-#define HEAL_DIST		300.0
-#define FLAG_SPEED		5000.0
+#define CUSTOM_WEAPON	"weapon_tmp"
+#define PI				3.141592653589793
 
 #include "ctf.inc.events.sp"
 #include "ctf.inc.functions.sp"
 #include "ctf.inc.classes.sp"
 #include "ctf.inc.weapons.sp"
+#include "ctf.inc.sentry.sp"
+#include "ctf.inc.grenades.sp"
 
 // ------------------------------------------------------------------------------------------------------------------
 // 		Forward: On...
 //
 public OnPluginStart() {
-	RegAdminCmd("sm_ctf_mapconfig", Cmd_MapConfig, ADMFLAG_BAN, "Gestion de la config de la map pour un CTF");
 	RegConsoleCmd("drop",			Cmd_Drop);
 	RegConsoleCmd("say",			Cmd_Say);
 	RegConsoleCmd("ultimate",		Cmd_Ultimate);
+	
+	RegConsoleCmd("+gren1",			Cmd_PlusGren1);
+	RegConsoleCmd("+gren2",			Cmd_PlusGren2);
+	RegConsoleCmd("-gren1",			Cmd_MoinsGren);
+	RegConsoleCmd("-gren2",			Cmd_MoinsGren);
 	
 	HookEvent("round_start", 	EventRoundStart, 	EventHookMode_Post);
 	HookEvent("player_spawn", 	EventSpawn, 		EventHookMode_Post);
@@ -115,8 +195,9 @@ public OnPluginStart() {
 	
 	CreateTimer(1.0, HudDataTask, 0, TIMER_REPEAT);
 	
-	g_iOffset_armor 	= FindSendPropInfo("CCSPlayer", 		"m_ArmorValue");
+	g_iOffset_armor 		= FindSendPropInfo("CCSPlayer", 		"m_ArmorValue");
 	g_iOffset_WeaponParent 	= FindSendPropOffs("CBaseCombatWeapon", "m_hOwnerEntity");
+	g_iOffset_money 		= FindSendPropOffs("CCSPlayer", 		"m_iAccount");
 	
 	g_hConfig = LoadGameConfigFile("phun");
 	StartPrepSDKCall(SDKCall_Player);
@@ -127,16 +208,22 @@ public OnPluginStart() {
 	
 	AddNormalSoundHook(NormalSHook:sound_hook);
 }
-
 public Action:sound_hook(clients[64], &numClients, String:sample[PLATFORM_MAX_PATH], &entity, &channel, &Float:volume, &level, &pitch, &flags) {
 	
 	if(StrEqual(sample,"weapons/flashbang/grenade_hit1.wav")) {
 		
-		if( GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == 0 ) {
+		if( GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == 0 )
 			return Plugin_Stop;
-		}
+		
+		new String:classname[64];
+		GetEdictClassname(entity, classname, 63);
+		
+		if( StrEqual(classname, "ctf_flag") )
+			return Plugin_Stop;
 		
 		volume = 0.5;
+		
+		Format(sample, sizeof(sample), "grenades/bounce.wav");
 		return Plugin_Changed;
 	}
 	
@@ -210,7 +297,7 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 			
 			if( team == CS_TEAM_CT || team == CS_TEAM_T ) {
 				g_iRevieveTime[i]--;
-				if( g_iRevieveTime[i] <= 0 ) {
+				if( g_iRevieveTime[i] <= 0 && g_iPlayerClass[i] != class_none ) {
 					CS_RespawnPlayer(i);
 				}
 			}
@@ -220,19 +307,48 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 		Format(szHUD, sizeof(szHUD), "Scores:\n");
 		
 		if( g_iScore[flag_red] > g_iScore[flag_blue] || (g_iScore[flag_red] == g_iScore[flag_blue] && GetClientTeam(i) == CS_TEAM_T ) ) {
-			Format(szHUD, sizeof(szHUD), "%s Equipe Rouge: %i\n Equipe Bleue: %i", szHUD, g_iScore[flag_red], g_iScore[flag_blue]);
+			Format(szHUD, sizeof(szHUD), "%s Equipe Rouge: %i\n Equipe Bleue: %i\n\n", szHUD, g_iScore[flag_red], g_iScore[flag_blue]);
 			
 		}
 		else if( g_iScore[flag_red] < g_iScore[flag_blue] || (g_iScore[flag_red] == g_iScore[flag_blue] && GetClientTeam(i) == CS_TEAM_CT ) ) {
-			Format(szHUD, sizeof(szHUD), "%s Equipe Bleue: %i\n Equipe Rouge: %i", szHUD, g_iScore[flag_blue], g_iScore[flag_red]);
+			Format(szHUD, sizeof(szHUD), "%s Equipe Bleue: %i\n Equipe Rouge: %i\n\n", szHUD, g_iScore[flag_blue], g_iScore[flag_red]);
 		}
+		else {
+			Format(szHUD, sizeof(szHUD), "%s Equipe Rouge: %i\n Equipe Bleue: %i\n\n", szHUD, g_iScore[flag_red], g_iScore[flag_blue]);
+		}
+		
+		
+		SetEntData(i, g_iOffset_armor, g_iPlayerArmor[i], 4, true);
+		
+		new String:money_nade[12];
+		Format(money_nade, sizeof(money_nade), "%i%i", g_iPlayerGrenadeAmount[i][0], g_iPlayerGrenadeAmount[i][1]);
+		
+		if( g_iPlayerClass[i] == class_engineer ) {
+			Format(money_nade, sizeof(money_nade), "%i%s", RoundFloat(g_flMetal[i]), money_nade);
+			
+			g_flMetal[i] += GetRandomFloat(1.0, 2.0);
+			if( g_flMetal[i] > 200.0 ) {
+				g_flMetal[i] = 200.0;
+			}
+			Format(szHUD, sizeof(szHUD), "%s\nMetal: %i", szHUD, RoundFloat(g_flMetal[i]));
+			
+			if( IsValidSentry(g_iSentry[i]) && g_flSentryHealth[ g_iSentry[i] ] > 0.0 ) {
+				Format(szHUD, sizeof(szHUD), "%s - Tourelle: %.1f HP", szHUD, g_flSentryHealth[ g_iSentry[i] ] );
+			}
+			else {
+				Format(szHUD, sizeof(szHUD), "%s - Tourelle: H/S", szHUD);
+			}
+		}
+		
+		Format(szHUD, sizeof(szHUD), "%s\nGrenade: %i - %i", szHUD, g_iPlayerGrenadeAmount[i][0], g_iPlayerGrenadeAmount[i][1]);
 		
 		new Handle:hBuffer = StartMessageOne("KeyHintText", i);
 		BfWriteByte(hBuffer, 1);
 		BfWriteString(hBuffer, szHUD);
 		EndMessage();
 		
-		SetEntData(i, g_iOffset_armor, g_iPlayerArmor[i], 4, true);
+		SetEntData(i, g_iOffset_money, StringToInt(money_nade), 4, true);
+		
 	}
 	
 	CleanUp();
@@ -241,57 +357,36 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 // ------------------------------------------------------------------------------------------------------------------
 // 		DataBase - Load&Store
 //
-public BDD_LoadFlag() {
-	new String:szCurrentMap[64], String:query[1024], Handle:hQuery;
-	GetCurrentMap(szCurrentMap, 63);
+public CTF_LoadFlag() {
 	
-	Format(query, sizeof(query), "SELECT `flag_red`, `flag_blue` FROM `ctf_map_config` WHERE `mapname`='%s' LIMIT 1;", szCurrentMap);
-	if ((hQuery = SQL_Query(g_hBDD, query)) == INVALID_HANDLE) {
-		Format(query, sizeof(query), "INSERT IGNORE INTO `ctf_map_config`( `mapname`, `flag_red`, `flag_blue`, `decals`) VALUES ('%s', '0.0:0.0:0.0', '0.0:0.0:0.0', '');", szCurrentMap);
-		SQL_FastQuery(g_hBDD, query);
-		return;
-	}
-	if (SQL_FetchRow(hQuery)) {
-		new String:szFlag[128], String:szFlag2[3][32];
-		SQL_FetchString(hQuery, 0, szFlag, sizeof(szFlag));
-		ExplodeString(szFlag, ":", szFlag2, 3, 32);
+	for(new i=1; i<GetMaxEntities(); i++) {
+		if( !IsValidEdict(i) )
+			continue;
+		if( !IsValidEntity(i) )
+			continue;
 		
-		PrintToServer("%s", szFlag);
-		for(new i=0; i<=2; i++) {
-			g_vecFlags[0][i] = StringToFloat(szFlag2[i]);
-		}
-		SQL_FetchString(hQuery, 1, szFlag, sizeof(szFlag));
-		ExplodeString(szFlag, ":", szFlag2, 3, 32);
+		new String:classname[64], String:targetname[64];
+		GetEdictClassname(i, classname, 63);
 		
-		for(new i=0; i<=2; i++) {
-			g_vecFlags[1][i] = StringToFloat(szFlag2[i]);
+		if( StrEqual(classname, "info_target") ) {
+			
+			
+			GetEntPropString(i, Prop_Data, "m_iName", targetname, sizeof(targetname));
+			
+			if( StrEqual(targetname, "ctf_flag_red") ) {
+				GetEntPropVector(i, Prop_Send, "m_vecOrigin", g_vecFlags[flag_red]);
+				PrintToServer("[CTF] Flag Red Position Set.");
+			}
+			if( StrEqual(targetname, "ctf_flag_blue") ) {
+				GetEntPropVector(i, Prop_Send, "m_vecOrigin", g_vecFlags[flag_blue]);
+				PrintToServer("[CTF] Flag Blue Position Set.");
+			}
 		}
 	}
-	else {
-		Format(query, sizeof(query), "INSERT IGNORE INTO `ctf_map_config`( `mapname`, `flag_red`, `flag_blue`, `decals`) VALUES ('%s', '0.0:0.0:0.0', '0.0:0.0:0.0', '');", szCurrentMap);
-		SQL_FastQuery(g_hBDD, query);
-		return;
-	}
-}
-public BDD_StoreFlag() {
-	new String:szCurrentMap[64], String:query[1024];
-	GetCurrentMap(szCurrentMap, 63);
-	
-	Format(query, sizeof(query), "UPDATE `ctf_map_config` SET `flag_red`='%f:%f:%f', `flag_blue`='%f:%f:%f' WHERE `mapname`='%s' LIMIT 1;", 
-	g_vecFlags[0][0], g_vecFlags[0][1], g_vecFlags[0][2], 
-	g_vecFlags[1][0], g_vecFlags[1][1], g_vecFlags[1][2], 
-	szCurrentMap
-	);
-	SQL_FastQuery(g_hBDD, query);
 }
 // ------------------------------------------------------------------------------------------------------------------
 // 		Commands
 //
-public Action:Cmd_MapConfig(client, args) {
-	Menu_MapConfig(client);
-	
-	return Plugin_Handled;
-}
 public Action:Cmd_Drop(client, args) {
 	
 	CTF_DropFlag(client, true);
@@ -333,47 +428,6 @@ public Action:Cmd_Ultimate(client, args) {
 	return Plugin_Handled;
 }
 // ------------------------------------------------------------------------------------------------------------------
-// 		Menu's
-//
-public Menu_MapConfig(client) {
-	
-	new Handle:menu = CreateMenu(hMenu_MapConfig);
-	
-	SetMenuTitle(menu, "CTF: admin menu");
-	
-	AddMenuItem(menu, "spawn_red", "Spawn RED-FLAG");
-	AddMenuItem(menu, "spawn_blue", "Spawn BLUE-FLAG");
-	
-	SetMenuExitButton(menu, true);
-	DisplayMenu(menu, client, MENU_TIME_FOREVER);
-	
-	return;
-}
-public hMenu_MapConfig(Handle:hMenu, MenuAction:action, client, param2) {
-	
-	if( action == MenuAction_Select ) {
-		
-		new String:options[64];
-		GetMenuItem(hMenu, param2, options, 63);
-		
-		if( StrEqual( options, "spawn_red", false) ) {
-			
-			GetClientAimLocation(client, g_vecFlags[flag_red]);
-			CTF_SpawnFlag(flag_red);
-			BDD_StoreFlag();
-		}
-		else if( StrEqual( options, "spawn_blue", false) ) {
-			GetClientAimLocation(client, g_vecFlags[flag_blue]);
-			CTF_SpawnFlag(flag_blue);
-			BDD_StoreFlag();
-		}
-		Menu_MapConfig(client);
-	}
-	else if( action == MenuAction_End ) {
-		CloseHandle(hMenu);
-	}
-}
-// ------------------------------------------------------------------------------------------------------------------
 // 		Stock
 //
 stock bool:PointInArea(Float:f_Points[3], Float:f_Mins[3], Float:f_Maxs[3]) {
@@ -413,5 +467,5 @@ public CleanUp() {
 	}
 }
 stock Float:degrees_to_radians(Float:degreesGiven) {
-	return degreesGiven*(3.141592653589793/180.0);
+	return degreesGiven*(PI/180.0);
 }

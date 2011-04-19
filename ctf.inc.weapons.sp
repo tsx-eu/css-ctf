@@ -13,6 +13,7 @@ public CTF_WEAPON_init() {
 	Format(g_szCustomWeapon_model[class_soldier], 255, "models/weapons/w_models/w_rocketlauncher.mdl");
 	Format(g_szCustomWeapon_model[class_demoman], 255, "models/weapons/w_models/w_grenadelauncher.mdl");
 	Format(g_szCustomWeapon_model[class_medic], 255, "models/weapons/w_models/w_medigun.mdl");
+	Format(g_szCustomWeapon_model[class_pyro], 255, "models/weapons/c_models/c_flamethrower/c_flamethrower.mdl");
 }
 
 // ------------------------------------------------------------------------------------------------------------------
@@ -144,9 +145,24 @@ public Action:CTF_WEAPON_CUSTOM_ACTION(client, &buttons) {
 			}
 		}
 	}
+	if( g_iPlayerClass[client] == class_pyro ) {
+		new WeaponIndex = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+		new String:WeaponName[64]; GetEdictClassname(WeaponIndex, WeaponName, 63);
+		
+		if( StrEqual(WeaponName, CUSTOM_WEAPON, false) && g_bIsCustomWeapon[ g_iCustomWeapon_Entity[client][1] ] ) {
+			
+			if( (buttons & IN_ATTACK) && g_fCustomWeapon_NextShoot[client][0] < GetGameTime() ) {
+				
+				CTF_WEAPON_FLAME_Attack_1(client);
+			}
+			if( (buttons & IN_RELOAD) && g_fCustomWeapon_NextShoot[client][2] < GetGameTime() ) {
+				
+				CTF_WEAPON_FLAME_Reload(client);
+			}
+		}
+	}
 	return Plugin_Continue;
 }
-
 // ------------------------------------------------------------------------------------------------------------------
 //		Custom Weapon - RPG
 //
@@ -502,6 +518,13 @@ public CTF_WEAPON_MEDIC_Attack_1(client) {
 		if( Entity_GetMaxHealth(target) >= health ) {
 			SetEntityHealth(target, health);
 		}
+		
+		if( g_iContaminated[target] > 0 ) {
+			if( g_fContaminate[target] < (GetGameTime() + 0.2) ) {
+				g_iContaminated[target] = 0;
+				g_fContaminate[target] = 0.0;
+			}
+		}
 		return;
 	}
 	
@@ -660,4 +683,115 @@ public CTF_WEAPON_MEDIC_link(client, target) {
 	g_iCustomWeapon_Entity2[client][1] = ent2;
 	
 	CTF_WEAPON_MEDIC_link(client, target);
+}
+
+// ------------------------------------------------------------------------------------------------------------------
+//		Custom Weapon - FLAME THROWER
+//
+public CTF_WEAPON_FLAME_Attack_1(client) {
+	if( g_iCustomWeapon_Ammo[client][0] <= 0 ) {
+		
+		if( g_fCustomWeapon_NextShoot[client][2] < GetGameTime() ) {
+			CTF_WEAPON_FLAME_Reload(client);
+		}
+	}
+	else {
+		
+		CTF_WEAPON_FLAME_Fire(client, false);
+		g_iCustomWeapon_Ammo[client][0]--;
+		
+		g_fCustomWeapon_NextShoot[client][0] = (GetGameTime() + 0.2);
+		g_fCustomWeapon_NextShoot[client][2] = (GetGameTime() + 0.2);
+		
+		if( g_iCustomWeapon_Ammo[client][0] <= 0 ) {
+			
+			CTF_WEAPON_FLAME_Reload(client);
+		}
+	}
+}
+public CTF_WEAPON_FLAME_Reload(client) {
+	if( (g_fCustomWeapon_NextShoot[client][0]) < GetGameTime() ) {
+		
+		if( g_iCustomWeapon_Ammo[client][0] < 100 && g_iCustomWeapon_Ammo[client][1] > 1) {
+			
+			CreateTimer(1.5, CTF_WEAPON_FLAME_Reload_Task, client);
+			
+			CTF_WEAPON_FLAME_Fire(client, true);
+			g_fCustomWeapon_NextShoot[client][0] = (GetGameTime() + 1.5);
+			g_fCustomWeapon_NextShoot[client][1] = (GetGameTime() + 1.5);
+			g_fCustomWeapon_NextShoot[client][2] = (GetGameTime() + 1.5);
+		}
+	}
+}
+public Action:CTF_WEAPON_FLAME_Reload_Task(Handle:timer, any:client) {
+	
+	if( g_iCustomWeapon_Ammo[client][0] < 100 && g_iCustomWeapon_Ammo[client][1] > 1) {
+		if( (g_fCustomWeapon_NextShoot[client][2]-0.2) < GetGameTime() ) {
+			
+			g_iCustomWeapon_Ammo[client][0] = 100;
+			g_iCustomWeapon_Ammo[client][1]--;
+			
+			g_fCustomWeapon_NextShoot[client][2] = (GetGameTime() + 0.6);
+		}
+	}
+}
+public CTF_WEAPON_FLAME_Fire(client, shutdown) {
+	
+	new Float:vecOrigin[3], Float:vecAngles[3], Float:vecTarget[3], String:ParentName[64];
+	
+	GetClientAbsOrigin(client, vecOrigin);
+	GetClientEyeAngles(client, vecAngles);	
+	
+	vecTarget[0] = 30.0;
+	vecTarget[1] = -10.0;
+	vecTarget[2] = 60.0;
+		
+	if( shutdown ) {
+		
+		if( g_iCustomWeapon_Entity2[client][0] > 0 && IsValidEdict(g_iCustomWeapon_Entity2[client][0]) && IsValidEntity(g_iCustomWeapon_Entity2[client][0]) ) {
+			
+			AcceptEntityInput(g_iCustomWeapon_Entity2[client][0], "Kill");
+			g_iCustomWeapon_Entity2[client][0] = -1;
+		}
+		
+		return;
+	}
+	
+	if( g_iCustomWeapon_Entity2[client][0] > 0 && IsValidEdict(g_iCustomWeapon_Entity2[client][0]) && IsValidEntity(g_iCustomWeapon_Entity2[client][0]) ) {
+		
+		new Float:fThreshold = (20.0 * PI/360.0);
+		
+		for(new i=1; i<=GetMaxClients(); i++) {
+			if( !IsValidClient(i) )
+				continue;
+			if( !IsPlayerAlive(i) )
+				continue;
+			
+			if( ClientViews(client, i, 300.0, fThreshold) ) {
+				DealDamage(i, GetRandomInt(4, 10), client, DMG_BURN);
+				g_iBurning[i] = client;
+			}
+		}
+		return;
+	}
+	
+	
+	new ent = CreateEntityByName("info_particle_system");
+	DispatchKeyValue(ent, "effect_name", "flamethrower");
+	DispatchSpawn(ent);
+	
+	TeleportEntity(ent, vecOrigin, vecAngles, NULL_VECTOR);
+	
+	DispatchKeyValue(ent, "start_active", "1");
+	ActivateEntity(ent);
+	
+	Format(ParentName, sizeof(ParentName), "ctf_pyro_%i%i%i", client, ent, GetRandomInt(11111, 99999) );
+	DispatchKeyValue(client, "targetname", ParentName);
+	
+	SetVariantString(ParentName);
+	AcceptEntityInput(ent, "SetParent");
+	
+	TeleportEntity(ent, vecTarget, NULL_VECTOR, NULL_VECTOR);
+	
+	g_iCustomWeapon_Entity2[client][0] = ent;
 }

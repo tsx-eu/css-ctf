@@ -51,6 +51,10 @@ public CTF_CLASS_init(client) {
 			CTF_NONE_init(client);
 		}
 	}
+	
+	g_iPlayerGrenadeAmount[client][0] = 4;
+	g_iPlayerGrenadeAmount[client][1] = 4;
+	g_flMetal[client] = 200.0;
 }
 public CTF_Ultimate(client) {
 	if( g_fUlti_Cooldown[client] > GetGameTime() ) {
@@ -243,7 +247,7 @@ public CTF_DEMOMAN_init(client) {
 	SetEntData(client, FindDataMapOffs(client, "m_iMaxHealth"), 100, 4, true);
 	SetEntityHealth(client, 90);
 	
-	g_iPlayerArmor[client] = 120;
+	g_iPlayerArmor[client] = 100;
 	
 	GivePlayerItem(client, "weapon_knife");
 	GivePlayerItem(client, "weapon_p228");
@@ -285,6 +289,78 @@ public CTF_MEDIC_init(client) {
 	g_iCustomWeapon_Ammo[client][1] = 0;
 }
 public CTF_MEDIC_ulti(client) {
+	
+	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	CTF_MEDIC_CONTA(client);
+}
+public CTF_MEDIC_CONTA(client) {
+	
+	new Float:vecOrigin[3], Float:vecOrigin2[3];
+	GetClientEyePosition(client, vecOrigin);
+	
+	
+	for(new i=1; i<=GetMaxClients(); i++) {
+		if( !IsValidClient(i) )
+			continue;
+		if( !IsPlayerAlive(i) )
+			continue;
+		
+		GetClientEyePosition(i, vecOrigin2);
+		
+		if( GetVectorDistance(vecOrigin, vecOrigin2) > (HEAL_DIST/2.0) )
+			continue;
+		
+		if( GetClientTeam(client) == GetClientTeam(i) )
+			continue;
+		
+		if( g_iPlayerClass[i] == class_medic )
+			continue;
+		
+		g_iContaminated[i] = client;
+	}
+}
+public CTF_MEDIC_HURTS(client) {
+	
+	g_fContaminate[client] = (GetGameTime() + GetRandomFloat(3.0, 5.0));
+	
+	new String:sound[128];
+	Format(sound, sizeof(sound), "vo/npc/barney/ba_pain0%i.wav", GetRandomInt(1, 9));
+	EmitSoundToAll(sound, client);
+	
+	new health = GetClientHealth(client);
+	health -= GetRandomInt(3, 8);
+	
+	if( health <= 0 ) {
+		SetEntityHealth(client, 1);
+		DealDamage(client, 100, g_iContaminated[client]);
+	}
+	else {
+		SetEntityHealth(client, health);
+	}
+	new Float:vecOrigin[3], Float:vecOrigin2[3], Float:vecNull[3];
+	GetClientEyePosition(client, vecOrigin);
+	
+	TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vecNull);
+	
+	for(new i=1; i<=GetMaxClients(); i++) {
+		if( !IsValidClient(i) )
+			continue;
+		if( !IsPlayerAlive(i) )
+			continue;
+		
+		GetClientEyePosition(i, vecOrigin2);
+		
+		if( GetVectorDistance(vecOrigin, vecOrigin2) > (HEAL_DIST/2.0) )
+			continue;
+		
+		if( GetClientTeam(client) != GetClientTeam(i) )
+			continue;
+		
+		if( g_iPlayerClass[i] == class_medic )
+			continue;
+		
+		g_iContaminated[i] = g_iContaminated[client];
+	}
 }
 // ------------------------------------------------------------------------------------------------------------------
 //		Classe: HWguy
@@ -303,6 +379,22 @@ public CTF_HWGUY_init(client) {
 	GivePlayerItem(client, "weapon_m249");
 }
 public CTF_HWGUY_ulti(client) {
+	
+	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	
+	SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.4);
+	SetEntityGravity(client, 1.6);
+	
+	g_fUlti_Cooldown[client] = (GetGameTime() + ULTI_COOLDOWN);
+	
+	CreateTimer(ULTI_DURATION, CTF_HWGUY_ulti_Task, client);
+}
+public Action:CTF_HWGUY_ulti_Task(Handle:timer, any:client) {
+	
+	SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.8);
+	SetEntityGravity(client, 1.1);
+	
+	PrintToChat(client, "Votre ultimate a pris fin!");
 }
 // ------------------------------------------------------------------------------------------------------------------
 //		Classe: Pyro
@@ -318,7 +410,10 @@ public CTF_PYRO_init(client) {
 	
 	GivePlayerItem(client, "weapon_knife");
 	GivePlayerItem(client, "weapon_p228");
-	GivePlayerItem(client, "weapon_m3");
+	GivePlayerItem(client, CUSTOM_WEAPON);
+	
+	g_iCustomWeapon_Ammo[client][0] = 100;
+	g_iCustomWeapon_Ammo[client][1] = 5;
 }
 public CTF_PYRO_ulti(client) {
 }
@@ -335,8 +430,45 @@ public CTF_SPY_init(client) {
 	g_iPlayerArmor[client] = 50;
 	
 	GivePlayerItem(client, "weapon_knife");
+	GivePlayerItem(client, "weapon_usp");
 }
 public CTF_SPY_ulti(client) {
+	
+	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	
+	g_fUlti_Cooldown[client] = (GetGameTime() + ULTI_COOLDOWN);
+	
+	CreateTimer(ULTI_DURATION, CTF_SPY_ulti_Task, client);
+	
+	new ent = CreateEntityByName("prop_ragdoll");
+	
+	new String:model[128];
+	Entity_GetModel(client, model, sizeof(model));
+
+	DispatchKeyValue(ent, "model", model);
+	
+	DispatchSpawn(ent);
+	ActivateEntity(ent);
+	
+	new Float:vecOrigin[3], Float:vecAngles[3];
+	GetClientEyePosition(client, vecOrigin);
+	GetClientEyeAngles(client, vecAngles);
+	
+	vecAngles[0] = 0.0;
+	TeleportEntity(ent, vecOrigin, vecAngles, NULL_VECTOR);
+	
+	SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_DEBRIS);
+	g_iCustomWeapon_Entity2[client][0] = ent;
+}
+public Action:CTF_SPY_ulti_Task(Handle:timer, any:client) {
+	
+	PrintToChat(client, "Votre ultimate a pris fin!");
+	
+	if( g_iCustomWeapon_Entity2[client][0] > 0 && IsValidEdict(g_iCustomWeapon_Entity2[client][0]) && IsValidEntity(g_iCustomWeapon_Entity2[client][0]) ) {
+		Desyntegrate(g_iCustomWeapon_Entity2[client][0]);
+		g_iCustomWeapon_Entity2[client][0] = 0;
+	}
+	
 }
 // ------------------------------------------------------------------------------------------------------------------
 //		Classe: Engineer
@@ -355,6 +487,10 @@ public CTF_ENGINEER_init(client) {
 	GivePlayerItem(client, "weapon_ump45");
 }
 public CTF_ENGINEER_ulti(client) {
+	
+	CTF_SG_Build(client);
+	
+	g_fUlti_Cooldown[client] = (GetGameTime() + 0.5);
 }
 // ------------------------------------------------------------------------------------------------------------------
 //		Classe: Civilian
@@ -393,7 +529,7 @@ public CTF_NONE_init(client) {
 	AddMenuItem(menu, "4", "Artificier");
 	AddMenuItem(menu, "5", "Infirmier");
 	AddMenuItem(menu, "6", "Mitrailleur");
-	AddMenuItem(menu, "7", "Pryoman");
+	AddMenuItem(menu, "7", "Pyroman", ITEMDRAW_DISABLED);
 	AddMenuItem(menu, "8", "Espion");
 	AddMenuItem(menu, "9", "Technicien");
 	
