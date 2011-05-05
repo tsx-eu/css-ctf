@@ -99,7 +99,10 @@ public Action:EventRoundStart(Handle:Event, const String:Name[], bool:Broadcast)
 	CTF_LoadFlag();
 	
 	CTF_SpawnFlag(flag_red);
-	CTF_SpawnFlag(flag_blue);	
+	CTF_SpawnFlag(flag_blue);
+	
+	ScheduleTargetInput("ctf_security_red_hurt", 0.5, "Enable");
+	ScheduleTargetInput("ctf_security_blue_hurt", 0.5, "Enable");
 	
 	return Plugin_Continue;
 }
@@ -199,11 +202,11 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 	if( StrEqual(classname, "trigger_hurt") ) {
 		
 		if( GetClientTeam(victim) == CS_TEAM_CT ) {
-			if( StrEqual(targetname, "ctf_kill_red", false)  )
+			if( StrEqual(targetname, "ctf_kill_red", false) || StrEqual(targetname, "ctf_security_blue_hurt", false) )
 				return Plugin_Handled;
 		}
 		if( GetClientTeam(victim) == CS_TEAM_T ) {
-			if( StrEqual(targetname, "ctf_kill_blue", false)  )
+			if( StrEqual(targetname, "ctf_kill_blue", false)  || StrEqual(targetname, "ctf_security_red_hurt", false) )
 				return Plugin_Handled;
 		}
 	}
@@ -472,56 +475,59 @@ public OnGameFrame() {
 				}
 			}
 		}
-		for(new i=1; i<=2048; i++) {
-			if( !IsValidEdict(i) )
-				continue;
-			if( !IsValidEntity(i) )
-				continue;
-			
-			new String:targetname[128];
-			GetEntPropString(i, Prop_Data, "m_iName", targetname, sizeof(targetname));
-			
-			if( StrContains(targetname, "red_sec", false) != -1 || StrContains(targetname, "blue_sec", false) != -1 ) {
+		
+		if( g_bSecurity ) {
+			for(new Flag_Type = 0; Flag_Type<=2; Flag_Type++) {
 				
-				
-				new flag_type = flag_red;
-				if( StrContains(targetname, "blue_sec", false) != -1 ) {
-					flag_type = flag_blue;
-				}
-				
-				
-				new Float:vecSec[3];
-				GetEntPropVector(i, Prop_Send, "m_vecOrigin", vecSec);
-				vecSec[2] -= 80.0;
-				new Float:dist = GetVectorDistance(vecOrigin, vecSec, false);
-				new Float:dist2 = GetVectorDistance(vecOrigin2, vecSec, false);
+				new Float:dist = GetVectorDistance(g_vecSecu[Flag_Type], vecOrigin);
+				new Float:dist2 = GetVectorDistance(g_vecSecu[Flag_Type], vecOrigin2);
 				
 				if( dist <= 32.0 || dist2 <= 32.0 ) {
 					
-					if( flag_type == 0 && GetClientTeam(client) == CS_TEAM_CT ) {
+					if( Flag_Type == _:flag_red && GetClientTeam(client) == CS_TEAM_CT ) {
 						
-						if( g_iSecu_Status[flag_type] )
+						if( g_iSecu_Status[Flag_Type] )
 							break;
 						
-						g_iSecu_Status[flag_type] = 1;
+						g_iSecu_Status[Flag_Type] = 1;
 						
-						ScheduleTargetInput("red_secdoor", 0.0, "Open");
-						ScheduleTargetInput("red_secdoor", ((40.0)-(6.0)), "Close");
+						ScheduleTargetInput("ctf_security_red_door", 0.0, "Open");
+						ScheduleTargetInput("ctf_security_red_door", ((40.0)-(4.0)), "Close");
 						
-						CreateTimer( ((40.0) + (0.01)), SecuIsActivited, flag_type);
+						ScheduleTargetInput("ctf_security_red_hurt", 0.0, "Disable");
+						ScheduleTargetInput("ctf_security_red_hurt", 40.0, "Enable");
+						
+						ScheduleTargetInput("ctf_security_red_flame", 0.0, "Disable");
+						ScheduleTargetInput("ctf_security_red_flame", 39.9, "Enable");
+						ScheduleTargetInput("ctf_security_red_flame", 40.0, "StartFire");
+						
+						ScheduleTargetInput("ctf_security_red_sound", 0.0, "StopSound");
+						ScheduleTargetInput("ctf_security_red_sound", 40.0, "PlaySound");
+						
+						CreateTimer( ((40.0) + (0.01)), SecuIsActivited, Flag_Type);
 						break;
 					}
-					if( flag_type == 1 && GetClientTeam(client) == CS_TEAM_T ) {
+					if( Flag_Type == _:flag_blue && GetClientTeam(client) == CS_TEAM_T ) {
 						
-						if( g_iSecu_Status[flag_type] )
+						if( g_iSecu_Status[Flag_Type] )
 							break;
 						
-						g_iSecu_Status[flag_type] = 1;
+						g_iSecu_Status[Flag_Type] = 1;
 						
-						ScheduleTargetInput("blue_secdoor", 0.0, "Open");
-						ScheduleTargetInput("blue_secdoor", ((40.0)-(6.0)), "Close");
+						ScheduleTargetInput("ctf_security_blue_door", 0.0, "Open");
+						ScheduleTargetInput("ctf_security_blue_door", ((40.0)-(4.0)), "Close");
 						
-						CreateTimer( ((40.0) + (0.01)), SecuIsActivited, flag_type);
+						ScheduleTargetInput("ctf_security_blue_hurt", 0.0, "Disable");
+						ScheduleTargetInput("ctf_security_blue_hurt", 40.0, "Enable");
+						
+						ScheduleTargetInput("ctf_security_blue_flame", 0.0, "Disable");
+						ScheduleTargetInput("ctf_security_blue_flame", 39.9, "Enable");
+						ScheduleTargetInput("ctf_security_blue_flame", 40.0, "StartFire");
+						
+						ScheduleTargetInput("ctf_security_blue_sound", 0.0, "StopSound");
+						ScheduleTargetInput("ctf_security_blue_sound", 40.0, "PlaySound");
+						
+						CreateTimer( ((40.0) + (0.01)), SecuIsActivited, Flag_Type);
 						break;
 					}
 				}

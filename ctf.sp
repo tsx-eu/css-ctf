@@ -68,7 +68,9 @@ new Float:g_fFlags_Respawn[flag_max];
 // ------------------------------
 // SECU
 //
+new Float:g_vecSecu[flag_max][3];
 new g_iSecu_Status[flag_max];
+new bool:g_bSecurity = false;
 // ------------------------------
 // SCORES
 //
@@ -359,6 +361,7 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 //
 public CTF_LoadFlag() {
 	
+	g_bSecurity = false;
 	for(new i=1; i<GetMaxEntities(); i++) {
 		if( !IsValidEdict(i) )
 			continue;
@@ -380,6 +383,17 @@ public CTF_LoadFlag() {
 			if( StrEqual(targetname, "ctf_flag_blue") ) {
 				GetEntPropVector(i, Prop_Send, "m_vecOrigin", g_vecFlags[flag_blue]);
 				PrintToServer("[CTF] Flag Blue Position Set.");
+			}
+			
+			if( StrEqual(targetname, "ctf_security_red_button") ) {
+				GetEntPropVector(i, Prop_Send, "m_vecOrigin", g_vecSecu[flag_red]);
+				PrintToServer("[CTF] Security Red Position Set.");
+				g_bSecurity = true;
+			}
+			if( StrEqual(targetname, "ctf_security_blue_button") ) {
+				GetEntPropVector(i, Prop_Send, "m_vecOrigin", g_vecSecu[flag_blue]);
+				PrintToServer("[CTF] Security Blue Position Set.");
+				g_bSecurity = true;
 			}
 		}
 	}

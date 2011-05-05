@@ -59,7 +59,7 @@ stock CTF_DropFlag(client, thrown=false) {
 	
 	TeleportEntity(g_iFlags_Entity[iFlagType], vecOrigin, vecNull, vecPush);
 	
-	g_fFlags_Respawn[iFlagType] = (GetGameTime() + 30.0);
+	g_fFlags_Respawn[iFlagType] = (GetGameTime() + 45.0);
 	
 	for(new i=1; i<=GetMaxClients(); i++) {
 		if( !IsValidClient(i) ) 
