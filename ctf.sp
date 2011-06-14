@@ -21,155 +21,8 @@ public Plugin:myinfo = {
 	url = "http://www.ts-x.eu/"
 }
 
-// ------------------------------
-// Enum
-//
-enum enum_flag_type {
-	flag_red = 0,
-	flag_blue,
-	flag_neutral,
-	flag_max
-};
-enum enum_class_type {
-	class_none = 0,
-	class_scout,
-	class_sniper,
-	class_soldier,
-	class_demoman,
-	class_medic,
-	class_hwguy,
-	class_pyro,
-	class_spy,
-	class_engineer,
-	class_civilian,
-	class_max
-}
-enum enum_grenade_type {
-	grenade_none,
-	grenade_caltrop,
-	grenade_concussion,
-	grenade_frag,
-	grenade_nail,
-	grenade_mirv,
-	grenade_mirvlet,
-	grenade_napalm,
-	grenade_gas,
-	grenade_emp,
-	
-	grenade_max
-}
-// ------------------------------
-// FLAGS
-//
-new g_iFlags_Entity[flag_max];
-new g_iFlags_Carrier[flag_max];
-new Float:g_vecFlags[flag_max][3];
-new Float:g_fFlags_Respawn[flag_max];
-// ------------------------------
-// SECU
-//
-new Float:g_vecSecu[flag_max][3];
-new g_iSecu_Status[flag_max];
-new bool:g_bSecurity = false;
-// ------------------------------
-// SCORES
-//
-new g_iScore[2];
-// ------------------------------
-// PLAYER
-//
-new g_iLastTeam[65];
-new g_iRevieveTime[65];
-new g_iPlayerArmor[65];
-new enum_class_type:g_iPlayerClass[65];
-new Float:g_fLastDrop[65];
-new Float:g_fUlti_Cooldown[65];
-// ------------------------------
-// Grenade
-//
-new g_iPlayerGrenadeAmount[65][2];
-new Float:g_flPrimedTime[2048];
-new enum_grenade_type:g_iGrenadeType[2048];
-new Float:g_flNailData[2048][2];
-new Float:g_flGasLastDamage[65];
-
-
-// ------------------------------
-// CUSTOM WEAPON
-//
-new g_iCustomWeapon_Entity[65][2];
-new g_iCustomWeapon_Entity2[65][3];
-new g_iCustomWeapon_Ammo[65][2];
-new bool:g_bIsCustomWeapon[2049];
-new Float:g_fCustomWeapon_NextShoot[65][3];
-// ------------------------------
-// OFFSET
-//
-new g_iOffset_armor = -1;
-new g_iOffset_WeaponParent = -1;
-new g_iOffset_money = -1;
-// ------------------------------
-// SDK-CALL HANDLE
-//
-new Handle:g_hConfig = INVALID_HANDLE;
-new Handle:g_hPosition = INVALID_HANDLE;
-// ------------------------------
-// PRECACHE
-//
-new g_cPhysicBeam;
-new g_cShockWave;
-new g_cShockWave2;
-new g_cSmokeBeam;
-new g_cExplode;
-new g_cScorch;
-// ------------------------------
-// Class: Artificier
-//
-new Float:g_C4_fExplodeTime[2048];
-new Float:g_C4_fNextBeep[2048];
-new bool:g_C4_bIsActive[2048];
-// ------------------------------
-// Class: Medic
-//
-new g_iContaminated[65];
-new Float:g_fContaminate[65];
-#define HEAL_DIST		300.0
-// ------------------------------
-// Class: Pyroman
-//
-new g_iBurning[65];
-new Float:g_fBurning[65];
-// ------------------------------
-// Class: Espion
-//
-new Float:g_fDelay[65][2];
-new Float:g_fRestoreSpeed[65][2];
-// ------------------------------
-// Class: Ingenieur
-//
-new g_iSentry[65];
-new Float:g_flSentryHealth[2048];
-new Float:g_flSentryThink[2048];
-new Float:g_flMetal[65];
-
-// ------------------------------
-// CTF-CONFIG
-//
-#define FLAG_SPEED		500.0
-// ------------------------------
-// ULTIMATE-CONFIG
-//
-#define ULTI_COOLDOWN	12.0
-#define ULTI_DURATION	10.0
-
-
-// ------------------------------
-// DO NOT EDIT BELLOW!
-//
-#define WALL_FACTOR		1.25
-#define CUSTOM_WEAPON	"weapon_tmp"
-#define PI				3.141592653589793
-
+#include "ctf.sp"
+#include "ctf.inc.const.sp"
 #include "ctf.inc.events.sp"
 #include "ctf.inc.functions.sp"
 #include "ctf.inc.classes.sp"
@@ -190,10 +43,26 @@ public OnPluginStart() {
 	RegConsoleCmd("-gren1",			Cmd_MoinsGren);
 	RegConsoleCmd("-gren2",			Cmd_MoinsGren);
 	
+	RegConsoleCmd("ctf_backpack_add",		CmdBackPack_add);
+	RegConsoleCmd("ctf_backpack_delete",	CmdBackPack_remove);
+	RegConsoleCmd("ctf_backpack_reload",	CmdBackPack_reload);
+	RegConsoleCmd("ctf_backpack_id", 		CmdBackPack_id);
+	
+	g_hClassRestriction[1] 	= CreateConVar("ctf_cr_scout",		"-1", "Class restriction: scout");
+	g_hClassRestriction[2]	= CreateConVar("ctf_cr_sniper",		"-1", "Class restriction: sniper");
+	g_hClassRestriction[3]	= CreateConVar("ctf_cr_soldier",	"-1", "Class restriction: soldier");
+	g_hClassRestriction[4]	= CreateConVar("ctf_cr_demoman",	"2", "Class restriction: demoman");
+	g_hClassRestriction[5]	= CreateConVar("ctf_cr_medic",		"-1", "Class restriction: medic");
+	g_hClassRestriction[6]	= CreateConVar("ctf_cr_hwguy",		"2", "Class restriction: hwguy");
+	g_hClassRestriction[7]	= CreateConVar("ctf_cr_pryo",		"1", "Class restriction: pyro");
+	g_hClassRestriction[8]	= CreateConVar("ctf_cr_spy",		"2", "Class restriction: spy");
+	g_hClassRestriction[9]	= CreateConVar("ctf_cr_engineer",	"1", "Class restriction: engineer");
+	
 	HookEvent("round_start", 	EventRoundStart, 	EventHookMode_Post);
 	HookEvent("player_spawn", 	EventSpawn, 		EventHookMode_Post);
 	HookEvent("player_death", 	EventDeath, 		EventHookMode_Pre);
 	HookEvent("bullet_impact", 	EventBulletImpact);
+	HookEvent("player_team", 	EventPlayerTeam,	EventHookMode_Pre);
 	
 	CreateTimer(1.0, HudDataTask, 0, TIMER_REPEAT);
 	
@@ -202,13 +71,88 @@ public OnPluginStart() {
 	g_iOffset_money 		= FindSendPropOffs("CCSPlayer", 		"m_iAccount");
 	
 	g_hConfig = LoadGameConfigFile("phun");
+	
 	StartPrepSDKCall(SDKCall_Player);
 	PrepSDKCall_SetFromConf(g_hConfig, SDKConf_Virtual, "Weapon_ShootPosition");
 	PrepSDKCall_SetReturnInfo(SDKType_Vector, SDKPass_ByValue);
 	g_hPosition = EndPrepSDKCall();
 	
-	
 	AddNormalSoundHook(NormalSHook:sound_hook);
+} 
+public Action:CmdBackPack_add(client, args) {
+	
+	new String:mapname[64], Float:vecOrigin[3], Float:vecAngles[3];
+	GetCurrentMap(mapname, sizeof(mapname));
+	
+	GetClientAbsOrigin(client, vecOrigin);
+	GetClientEyeAngles(client, vecAngles);
+	vecAngles[1] *= 0.1;
+	vecAngles[1] = float(RoundFloat(vecAngles[1]));
+	vecAngles[1] *= 10.0;
+	
+	Format(g_szQuery, sizeof(g_szQuery), "INSERT INTO `ctf_bagpack` VALUES ('', '%s', '%i', '1', '%i', '%i', '%i', '%i');", 
+	mapname, GetClientTeam(client), RoundFloat(vecOrigin[0]), RoundFloat(vecOrigin[1]), RoundFloat(vecOrigin[2]), RoundFloat(vecAngles[1]));
+	
+	SQL_LockDatabase(g_hBDD);
+	SQL_FastQuery(g_hBDD, g_szQuery);
+	SQL_UnlockDatabase(g_hBDD);
+	
+	CTF_LoadFlag();
+	CTF_SpawnBackPack();
+	
+	return Plugin_Handled;
+}
+public Action:CmdBackPack_remove(client, args) {
+	
+	new ent = GetClientAimTarget(client, false);
+	
+	if( !IsValidEdict(ent) || !IsValidEntity(ent) )
+		return Plugin_Handled;
+	
+	new id = -1;
+	
+	for(new i=0; i<MAX_BAGPACK; i++) {
+		if( g_BagPack_Data[i][bagpack_ent] == ent ) {
+			id = g_BagPack_Data[i][bagpack_id];
+			break;
+		}
+	}
+	if( id >= 0 ) {
+		
+		Format(g_szQuery, sizeof(g_szQuery), "DELETE FROM `ctf_bagpack` WHERE `id`='%i' LIMIT 1;", id);
+		SQL_FastQuery(g_hBDD, g_szQuery);
+		AcceptEntityInput(ent, "Kill");
+	}
+	
+	return Plugin_Handled;
+}
+public Action:CmdBackPack_reload(client, args) {
+	
+	CTF_LoadFlag();
+	CTF_SpawnBackPack();
+	return Plugin_Handled;
+}
+public Action:CmdBackPack_id(client, args) {
+	
+	new ent = GetClientAimTarget(client, false);
+	
+	if( !IsValidEdict(ent) || !IsValidEntity(ent) )
+		return Plugin_Handled;
+	
+	new id = -1;
+	
+	for(new i=0; i<MAX_BAGPACK; i++) {
+		if( g_BagPack_Data[i][bagpack_ent] == ent ) {
+			id = g_BagPack_Data[i][bagpack_id];
+			break;
+		}
+	}
+	if( id >= 0 ) {
+		
+		PrintToChat(client, "id:%i", id);
+	}
+	
+	return Plugin_Handled;
 }
 public Action:sound_hook(clients[64], &numClients, String:sample[PLATFORM_MAX_PATH], &entity, &channel, &Float:volume, &level, &pitch, &flags) {
 	
@@ -221,6 +165,9 @@ public Action:sound_hook(clients[64], &numClients, String:sample[PLATFORM_MAX_PA
 		GetEdictClassname(entity, classname, 63);
 		
 		if( StrEqual(classname, "ctf_flag") )
+			return Plugin_Stop;
+		
+		if( StrContains(classname, "ctf_flame") == 0 )
 			return Plugin_Stop;
 		
 		volume = 0.5;
@@ -269,15 +216,17 @@ public ScheduleTargetInput( const String:targetname[], Float:time, const String:
 public Action:ScheduleTargetInput_Task(Handle:timer, Handle:dp) {
 	new entity, String:input[128];
 	
-	if( !IsValidEdict(entity) )
-		return Plugin_Handled;
-	if( !IsValidEntity(entity) )
-		return Plugin_Handled;
-	
 	ResetPack(dp);
 	
 	entity = ReadPackCell(dp);
 	ReadPackString(dp, input, 127);
+	
+	if( entity <= 0 )
+		return Plugin_Handled;
+	if( !IsValidEdict(entity) )
+		return Plugin_Handled;
+	if( !IsValidEntity(entity) )
+		return Plugin_Handled;
 	
 	AcceptEntityInput(entity, input);
 	
@@ -298,12 +247,24 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 			new team = GetClientTeam(i);
 			
 			if( team == CS_TEAM_CT || team == CS_TEAM_T ) {
+				
 				g_iRevieveTime[i]--;
-				if( g_iRevieveTime[i] <= 0 && g_iPlayerClass[i] != class_none ) {
+				
+				if( g_iRevieveTime[i] > 1 ) {
+					PrintHintText(i, "Vous allez revivre dans: %i secondes...", g_iRevieveTime[i]);
+				}
+				else {
+					PrintHintText(i, "Vous allez revivre dans: 1 seconde...");
+				}
+				StopSound(i, SNDCHAN_STATIC, "UI/hint.wav");
+				
+				if( g_iRevieveTime[i] <= 0 ) {
 					CS_RespawnPlayer(i);
 				}
 			}
 		}
+		
+		CTF_TP_Links(i);
 		
 		new String:szHUD[128];
 		Format(szHUD, sizeof(szHUD), "Scores:\n");
@@ -334,8 +295,8 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 			}
 			Format(szHUD, sizeof(szHUD), "%s\nMetal: %i", szHUD, RoundFloat(g_flMetal[i]));
 			
-			if( IsValidSentry(g_iSentry[i]) && g_flSentryHealth[ g_iSentry[i] ] > 0.0 ) {
-				Format(szHUD, sizeof(szHUD), "%s - Tourelle: %.1f HP", szHUD, g_flSentryHealth[ g_iSentry[i] ] );
+			if( IsValidSentry( g_iBuild[i][build_sentry]) && g_flBuildHealth[ g_iBuild[i][build_sentry] ][build_sentry] > 0.0 ) {
+				Format(szHUD, sizeof(szHUD), "%s - Tourelle: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_sentry] ][build_sentry] );
 			}
 			else {
 				Format(szHUD, sizeof(szHUD), "%s - Tourelle: H/S", szHUD);
@@ -397,6 +358,95 @@ public CTF_LoadFlag() {
 			}
 		}
 	}
+	
+	new String:mapname[32];
+	GetCurrentMap(mapname, sizeof(mapname));
+	
+	Format(g_szQuery, sizeof(g_szQuery), "SELECT `id`, `team`, `type`, `origin_x`, `origin_y`, `origin_z`, `angle_y` FROM `ctf_bagpack` WHERE `map`='%s';", mapname);
+	
+	SQL_LockDatabase(g_hBDD);
+	new Handle:req = SQL_Query(g_hBDD, g_szQuery);
+	
+	if( req != INVALID_HANDLE ) {
+		
+		for(new i=0; i<MAX_BAGPACK; i++) {
+			
+			g_BagPack_Data[i][bagpack_data] = 0;
+			if( g_BagPack_Data[i][bagpack_ent] >= 1 && IsValidEdict(g_BagPack_Data[i][bagpack_ent]) && IsValidEntity(g_BagPack_Data[i][bagpack_ent]) ) {
+				new String:classname[64];
+				GetEdictClassname(g_BagPack_Data[i][bagpack_ent], classname, 63);
+				
+				if( StrContains(classname, "ctf_backpack_") == 0 ) {
+					AcceptEntityInput(g_BagPack_Data[i][bagpack_ent], "Kill");
+				}
+			}
+		}
+		
+		new i = 0;
+		while( SQL_FetchRow(req) ) {
+			
+			g_BagPack_Data[i][bagpack_id] = SQL_FetchInt(req, 0);
+			g_BagPack_Data[i][bagpack_data] = 1;
+			g_BagPack_Data[i][bagpack_team] = SQL_FetchInt(req, 1);
+			g_BagPack_Data[i][bagpack_type] = SQL_FetchInt(req, 2);
+			
+			g_BagPack_Data[i][bagpack_origin_x] = SQL_FetchInt(req, 3);
+			g_BagPack_Data[i][bagpack_origin_y] = SQL_FetchInt(req, 4);
+			g_BagPack_Data[i][bagpack_origin_z] = SQL_FetchInt(req, 5);
+			
+			g_BagPack_Data[i][bagpack_angle] = SQL_FetchInt(req, 6);
+			
+			i++;
+		}
+	}
+	
+	SQL_UnlockDatabase(g_hBDD);
+}
+public CTF_SpawnBackPack() {
+	
+	for(new i=0; i<MAX_BAGPACK; i++) {
+		
+		if( g_BagPack_Data[i][bagpack_data] == 0 )
+			continue;
+		
+		
+		
+		new ent = CreateEntityByName("prop_dynamic");
+		new String:classname[64];
+		Format(classname, 63, "ctf_backpack_%i", g_BagPack_Data[i][bagpack_team]);
+		
+		DispatchKeyValue(ent, "classname", classname);
+		
+		if( g_BagPack_Data[i][bagpack_type] == 1 ) {
+			PrecacheModel("models/items/ammocrate_smg1.mdl");
+			DispatchKeyValue(ent, "model", "models/items/ammocrate_smg1.mdl");
+		}
+		else if( g_BagPack_Data[i][bagpack_type] == 2 ) {
+			PrecacheModel("models/items/ammocrate_grenade.mdl");
+			DispatchKeyValue(ent, "model", "models/items/ammocrate_grenade.mdl");
+		}
+		
+		SetEntProp(ent, Prop_Data, "m_nSolidType", 6 );
+		SetEntProp(ent, Prop_Send, "m_nSolidType", 6 );
+		SetEntProp(ent, Prop_Data, "m_CollisionGroup", 5);
+		SetEntProp(ent, Prop_Send, "m_CollisionGroup", 5);
+		SetEntityMoveType(ent, MOVETYPE_VPHYSICS);
+		
+		DispatchSpawn(ent);
+		ActivateEntity(ent);
+		
+		g_BagPack_Data[i][bagpack_ent] = ent;
+		
+		new Float:vecOrigin[3], Float:vecAngles[3];
+		vecOrigin[0] = float(g_BagPack_Data[i][bagpack_origin_x]);
+		vecOrigin[1] = float(g_BagPack_Data[i][bagpack_origin_y]);
+		vecOrigin[2] = float(g_BagPack_Data[i][bagpack_origin_z]);
+		vecAngles[1] = float(g_BagPack_Data[i][bagpack_angle]);
+		
+		vecOrigin[2] += 16.0;
+		
+		TeleportEntity(ent, vecOrigin, vecAngles, NULL_VECTOR);
+	}
 }
 // ------------------------------------------------------------------------------------------------------------------
 // 		Commands
@@ -426,7 +476,7 @@ public Action:Cmd_Say(client, args) {
 	strcmp(szSayTrig, "!classes", false) == 0	|| strcmp(szSayTrig, "/classes", false) == 0	
 	) {
 		
-		g_iPlayerClass[client] = class_none;
+		//g_iPlayerClass[client] = class_none;
 		CTF_NONE_init(client);
 		return Plugin_Handled;
 	}

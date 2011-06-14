@@ -4,6 +4,13 @@
 #define _ctf_events_included
 
 #include "ctf.sp"
+#include "ctf.inc.const.sp"
+#include "ctf.inc.events.sp"
+#include "ctf.inc.functions.sp"
+#include "ctf.inc.classes.sp"
+#include "ctf.inc.weapons.sp"
+#include "ctf.inc.sentry.sp"
+#include "ctf.inc.grenades.sp"
 
 // ------------------------------------------------------------------------------------------------------------------
 //		Hooks -	Connexions Call
@@ -33,7 +40,7 @@ public OnClientPutInServer(client) {
 	if( IsFakeClient(client) )
 		g_iPlayerClass[client] = enum_class_type:GetRandomInt(1, 9);
 	
-	SDKHook(client, SDKHook_Touch, CTF_CLIENT_TOUCH);	
+	SDKHook(client, SDKHook_Touch, CTF_CLIENT_TOUCH);
 }
 public Action:CTF_CLIENT_TOUCH(client, target) {
 	if( !IsValidClient(client) )
@@ -88,12 +95,39 @@ public OnClientDisconnect(client) {
 	
 	if( g_iPlayerClass[client] == class_demoman ) 
 		CTF_WEAPON_PIPE_PipeBomb_EXPL(client, true);
+	
+	if( g_iPlayerClass[client] == class_engineer )
+		CTF_ENGINEER_DETALL(client);
+	
 	CTF_WEAPON_CUSTOM_CLEAN(client);
 }
 
 // ------------------------------------------------------------------------------------------------------------------
 // 		Hooks - Event
 //
+public Action:EventPlayerTeam(Handle:Event, const String:name[], bool:dontBroadcast) {
+	// Don't broadcast the player_team event to chat
+	SetEventBroadcast(Event, true);
+	
+	new client = GetClientOfUserId(GetEventInt(Event, "userid"));
+	
+	new team = GetEventInt(Event, "team");
+	new oldteam = GetEventInt(Event, "oldteam");
+	
+	if( team != oldteam ) {
+		CTF_ENGINEER_DETALL(client);
+		CTF_WEAPON_PIPE_PipeBomb_EXPL(client, true);
+	}
+	
+	g_iPlayerClass[client] = class_none;
+	if( team == CS_TEAM_CT ) {
+		PrintToChatAll("[CTF] %N a rejoin l'equipe bleue.", client);
+	}
+	else if( team == CS_TEAM_T ) {
+		PrintToChatAll("[CTF] %N a rejoin l'equipe rouge.", client);
+	}
+	return Plugin_Continue;
+}
 public Action:EventRoundStart(Handle:Event, const String:Name[], bool:Broadcast) {
 	
 	CTF_LoadFlag();
@@ -104,6 +138,7 @@ public Action:EventRoundStart(Handle:Event, const String:Name[], bool:Broadcast)
 	ScheduleTargetInput("ctf_security_red_hurt", 0.5, "Enable");
 	ScheduleTargetInput("ctf_security_blue_hurt", 0.5, "Enable");
 	
+	CTF_SpawnBackPack();
 	return Plugin_Continue;
 }
 public Action:EventSpawn(Handle:Event, const String:Name[], bool:Broadcast) {
@@ -116,6 +151,16 @@ public Action:EventSpawn(Handle:Event, const String:Name[], bool:Broadcast) {
 		else if( GetClientTeam(client) == CS_TEAM_T ) {
 			ClientCommand(client, "play \"DeadlyDesire/ctf/YouAreOnRed.mp3\"");
 		}
+	}
+	
+	if( g_iPlayerClass[client] == class_none ) {
+		
+		g_flPlayerSpeed[client] = 0.0;
+		
+		SetEntData(client, FindDataMapOffs(client, "m_iMaxHealth"), 1, 4, true);
+		SetEntityHealth(client, 1);
+		
+		g_iPlayerArmor[client] = 0;
 	}
 	
 	g_iLastTeam[client] = GetClientTeam(client);
@@ -156,7 +201,12 @@ public EventBulletImpact(Handle:event,const String:name[],bool:dontBroadcast) {
 	
 	new attacker = GetClientOfUserId(GetEventInt(event, "userid"));
 	
-	if( g_fUlti_Cooldown[attacker] > (GetGameTime()+55.0) ) {
+	new Float:bulletDestination[3];
+	bulletDestination[0] = GetEventFloat( event, "x" );
+	bulletDestination[1] = GetEventFloat( event, "y" );
+	bulletDestination[2] = GetEventFloat( event, "z" );
+	
+	if( g_iPlayerClass[attacker] == class_sniper && g_fUlti_Cooldown[attacker] > (GetGameTime()+ULTI_COOLDOWN-ULTI_DURATION) ) {
 		new WeaponIndex = GetEntPropEnt(attacker, Prop_Send, "m_hActiveWeapon");
 		new String:WeaponName[64]; GetEdictClassname(WeaponIndex, WeaponName, 63);
 		
@@ -165,10 +215,7 @@ public EventBulletImpact(Handle:event,const String:name[],bool:dontBroadcast) {
 			new Float:bulletOrigin[3];
 			SDKCall( g_hPosition, attacker, bulletOrigin );
 			
-			new Float:bulletDestination[3];
-			bulletDestination[0] = GetEventFloat( event, "x" );
-			bulletDestination[1] = GetEventFloat( event, "y" );
-			bulletDestination[2] = GetEventFloat( event, "z" );
+			
 			
 			new Float:distance = GetVectorDistance( bulletOrigin, bulletDestination );
 			
@@ -189,11 +236,41 @@ public EventBulletImpact(Handle:event,const String:name[],bool:dontBroadcast) {
 		}
 	}
 	
+	for(new a=1; a<=GetMaxClients(); a++) {
+		if( !IsValidClient(a) )
+			continue;
+		if( g_iPlayerClass[a] != class_engineer )
+			continue;
+		
+		new Float:vecOrigin[3];
+		
+		
+		if( IsValidTeleporter( g_iBuild[a][build_teleporter_in] ) ) {
+			
+			GetEntPropVector(g_iBuild[a][build_teleporter_in], Prop_Send, "m_vecOrigin", vecOrigin);
+			
+			if( GetVectorDistance(vecOrigin, bulletDestination) <= 16.0 ) {
+				DealDamage(g_iBuild[a][build_teleporter_in], GetRandomInt(40, 60), a);
+			}
+		}
+		
+		if( IsValidTeleporter( g_iBuild[a][build_teleporter_out] ) ) {
+			
+			GetEntPropVector(g_iBuild[a][build_teleporter_out], Prop_Send, "m_vecOrigin", vecOrigin);
+			
+			if( GetVectorDistance(vecOrigin, bulletDestination) <= 16.0 ) {
+				DealDamage(g_iBuild[a][build_teleporter_out], GetRandomInt(40, 60), a);
+			}
+		}
+		
+	}
 }
 // ------------------------------------------------------------------------------------------------------------------
 //		Hooks - GameForwards
 //
 public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype) {
+	
+	//PrintToChat(victim, "Attacker: %i - inflictor: %i", attacker, inflictor);
 	
 	new String:classname[128], String:targetname[128];
 	GetEdictClassname(inflictor, classname, 127);
@@ -201,6 +278,13 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 	
 	if( StrEqual(classname, "trigger_hurt") ) {
 		
+		new String:currentmap[64];
+		GetCurrentMap(currentmap, sizeof(currentmap));
+		if( StrEqual(currentmap, "ctf_schtop") ) {
+			if( attacker == inflictor && attacker == (1172+GetMaxClients()) ) {
+				Format(targetname, sizeof(targetname), "ctf_kill_red");
+			}
+		}
 		if( GetClientTeam(victim) == CS_TEAM_CT ) {
 			if( StrEqual(targetname, "ctf_kill_red", false) || StrEqual(targetname, "ctf_security_blue_hurt", false) )
 				return Plugin_Handled;
@@ -211,9 +295,19 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		}
 	}
 	
-	if( IsValidSentry(victim) ) {
+	
+	if( IsValidSentry(victim) || IsValidTeleporter(victim) ) {
+		new owner, build_type;
 		
-		new owner = CTF_SG_GetOwner(victim), Float:vecPos[3];
+		for(new i=0; i<=build_max; i++) {
+			
+			owner = CTF_SG_GetBuildingOwner(victim, i);
+			build_type = i;
+			
+			if( owner != 0 )
+				break;
+		}
+		new Float:vecPos[3];
 		
 		if( IsValidClient(owner) && IsValidClient(attacker) ) {
 			if( GetClientTeam(owner) == GetClientTeam(attacker) ) {
@@ -221,14 +315,14 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 			}
 		}
 		
-		if( g_flSentryHealth[victim] >= 200 && (g_flSentryHealth[victim]-damage) < 200 ) {
+		if( g_flBuildHealth[victim][build_type] >= 200 && (g_flBuildHealth[victim][build_type]-damage) < 200 ) {
 			
 			new ent = AttachParticle(victim, "smoke_gib_01", -1.0);
 			
 			vecPos[2] += 50.0;
 			TeleportEntity(ent, vecPos, NULL_VECTOR, NULL_VECTOR);
 		}
-		if( g_flSentryHealth[victim] >= 100 && (g_flSentryHealth[victim]-damage) < 100 ) {
+		if(g_flBuildHealth[victim][build_type] >= 100 && (g_flBuildHealth[victim][build_type]-damage) < 100 ) {
 			
 			new ent = AttachParticle(victim, "burning_gib_01", -1.0);
 			
@@ -236,9 +330,9 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 			TeleportEntity(ent, vecPos, NULL_VECTOR, NULL_VECTOR);
 		}
 		
-		g_flSentryHealth[victim] -= damage;
+		g_flBuildHealth[victim][build_type] -= damage;
 		
-		if( g_flSentryHealth[victim] <= 0 ) {
+		if( g_flBuildHealth[victim][build_type] <= 0 ) {
 			
 			new Float:vecAngl[3]; vecAngl[0] = 90.0;
 			
@@ -252,10 +346,18 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 			
 			TeleportEntity(victim, vecPos, vecAngl, NULL_VECTOR);
 			
+			EmitSoundFromOrigin("npc/turret_floor/die.wav", vecPos);
+			
 		}
 		return Plugin_Handled;
 	}
 	new bool:changed = false;
+	
+	if( attacker == 0 && inflictor == 0 ) {
+		damage *= 0.25;
+		damage -= 10.0;
+		changed = true;
+	}
 	
 	if( IsValidClient(attacker) ) {
 		switch( g_iPlayerClass[attacker] ) {
@@ -286,16 +388,20 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 					new WeaponIndex = GetEntPropEnt(attacker, Prop_Send, "m_hActiveWeapon");
 					GetEdictClassname(WeaponIndex, classname, 127);
 					
-					if( StrEqual(classname, "weapon_knife") )
-						damage *= 4.0;
+					if( StrEqual(classname, "weapon_knife") ) {
+						
+						if( !ClientViews_LeftRight(victim, attacker, 1000.0, 0.8) ) {
+							damage *= 10.0;
+						}
+					}
 					else if( StrEqual(classname, "weapon_usp") ) {
 						damage *= 0.0;
 						
 						g_fRestoreSpeed[victim][0] = (GetGameTime() + 2.0);
 						if( g_fRestoreSpeed[victim][1] < 0.01 ) {
-							g_fRestoreSpeed[victim][1] = GetEntPropFloat(victim, Prop_Data, "m_flLaggedMovementValue");
+							g_fRestoreSpeed[victim][1] = g_flPlayerSpeed[victim];
 						}
-						SetEntPropFloat(victim, Prop_Data, "m_flLaggedMovementValue", 0.2);
+						g_flPlayerSpeed[victim] = 100.0;
 					}
 				}
 			}
@@ -323,29 +429,31 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 				changed = true;
 			}
 		}
-		if( g_iPlayerArmor[victim] >= 1 ) {
-			
-			
-			damage = damage * 0.8;
-			
-			new health = GetClientHealth(victim);
-			
-			g_iPlayerArmor[victim] = (g_iPlayerArmor[victim] - RoundToCeil(damage / 10.0 * 8.0));
-			health = (health - RoundToCeil( damage / 10.0 * 6.0 ));
-			
-			while( g_iPlayerArmor[victim] < 0 ) {
-				health -= GetRandomInt(1, 2);
-				g_iPlayerArmor[victim]++;
+		if( IsValidClient(victim) ) {
+			if( g_iPlayerArmor[victim] >= 1 ) {
 				
-				if( g_iPlayerArmor[victim] >= 0 )
-					break;
-			}
-			
-			
-			if( health >= 1 ) {
-				damage *= 0.0;
-				changed = true;			
-				SetEntityHealth(victim, health);
+				
+				damage = damage * 0.8;
+				
+				new health = GetClientHealth(victim);
+				
+				g_iPlayerArmor[victim] = (g_iPlayerArmor[victim] - RoundToCeil(damage / 10.0 * 8.0));
+				health = (health - RoundToCeil( damage / 10.0 * 6.0 ));
+				
+				while( g_iPlayerArmor[victim] < 0 ) {
+					health -= GetRandomInt(1, 2);
+					g_iPlayerArmor[victim]++;
+					
+					if( g_iPlayerArmor[victim] >= 0 )
+						break;
+				}
+				
+				
+				if( health >= 1 ) {
+					damage *= 0.0;
+					changed = true;			
+					SetEntityHealth(victim, health);
+				}
 			}
 		}
 	}
@@ -381,7 +489,7 @@ public OnGameFrame() {
 	}
 	
 	for(new i=1; i<2048; i++) {
-		if( g_flNailData[i][1] > 0.0 && g_flNailData[i][1] > GetGameTime() ) {
+		if( g_flNailData[i][1] > 0.0 && g_flNailData[i][1] < GetGameTime() ) {
 			
 			if( !IsValidEdict(i) ) {
 				g_flNailData[i][1] = -1.0;
@@ -440,11 +548,25 @@ public OnGameFrame() {
 					continue;
 				
 				DealDamage(client, GetRandomInt(8, 12), owner);
+				
+				g_flCrazyTime[client] = (GetGameTime() + 20.0);
 			}
 		}
 		if( StrContains(classname, "ctf_nade") == 0 ) {
 			new Float:vecAngles[3];
 			TeleportEntity(i, NULL_VECTOR, vecAngles, NULL_VECTOR);
+		}
+		if( StrContains(classname, "ctf_flame") == 0 ) {
+			
+			if( g_flCustomWeapon_Entity3[i] < GetGameTime() ) {
+				//PrintToChatAll("%i:%i", i, GetEntProp(i, Prop_Data, "m_nWaterLevel"));
+				
+				if( GetEntProp(i, Prop_Data, "m_nWaterLevel") > 0 ) {
+					AcceptEntityInput(i, "Kill");
+					//RemoveEdict(i);
+					continue;
+				}
+			}
 		}
 	}
 	
@@ -631,43 +753,45 @@ public OnGameFrame() {
 			
 			
 			new WeaponIndex = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
-			new Float:fLastAttack = (GetEntPropFloat(WeaponIndex, Prop_Send, "m_flNextPrimaryAttack")-GetGameTime()) * 800.0;
-			if( fLastAttack < 1.0 )
-				fLastAttack = 1.0;
-			if( fLastAttack > 250.0 )
-				fLastAttack = 250.0;
-			
-			if( fLastAttack > 50.0 ) {
-				g_fDelay[client][1] = GetGameTime() + ((fLastAttack/50.0)*1.5);
+			if( WeaponIndex != -1 ) {
+				new Float:fLastAttack = (GetEntPropFloat(WeaponIndex, Prop_Send, "m_flNextPrimaryAttack")-GetGameTime()) * 800.0;
+				if( fLastAttack < 1.0 )
+					fLastAttack = 1.0;
+				if( fLastAttack > 250.0 )
+					fLastAttack = 250.0;
+				
+				if( fLastAttack > 50.0 ) {
+					g_fDelay[client][1] = GetGameTime() + ((fLastAttack/50.0)*1.5);
+				}
+				
+				new Float:fDelay2 = (g_fDelay[client][1]-GetGameTime())*255.0;
+				if( fDelay2 < 1.0 )
+					fDelay2 = 1.0;
+				if( fDelay2 > 250.0 )
+					fDelay2 = 250.0;
+				
+				new alpha = 100 + RoundToCeil( (fSpeed/250.0) * fDelay * fDelay2 * 100.0 );
+				
+				if( alpha > 240 )
+					alpha = 240;
+				
+				if( alpha < 50 )
+					alpha = 50;
+				
+				if( g_fUlti_Cooldown[client] > (GetGameTime()+(50.0)) ) {
+					Colorize(client, 255, 255, 255, 0);
+				}
+				else {
+					Colorize(client, 255, 255, 255, alpha);
+				}
+				
+				new String:classname[128];
+				GetEdictClassname(WeaponIndex, classname, 127);
+				
+				if( StrEqual(classname, "weapon_usp") ) {
+					SetEntProp(WeaponIndex, Prop_Send, "m_bSilencerOn", 1);
+				}
 			}
-			
-			new Float:fDelay2 = (g_fDelay[client][1]-GetGameTime())*255.0;
-			if( fDelay2 < 1.0 )
-				fDelay2 = 1.0;
-			if( fDelay2 > 250.0 )
-				fDelay2 = 250.0;
-			
-			new alpha = 100 + RoundToCeil( (fSpeed/250.0) * fDelay * fDelay2 * 155.0 );
-			
-			if( alpha > 240 )
-				alpha = 240;
-			
-			if( alpha < 100 )
-				alpha = 100;
-			
-			if( g_fUlti_Cooldown[client] > (GetGameTime()+(ULTI_COOLDOWN-ULTI_DURATION)) ) {
-				Colorize(client, 255, 255, 255, 0);
-			}
-			else {
-				Colorize(client, 255, 255, 255, alpha);
-			}
-			
-			new String:classname[128];
-			GetEdictClassname(WeaponIndex, classname, 127);
-			
-			if( StrEqual(classname, "weapon_usp") )
-				SetEntProp(WeaponIndex, Prop_Send, "m_bSilencerOn", 1);
-			
 		}
 		
 		for(new i=GetMaxClients(); i<2048; i++) {
@@ -706,18 +830,117 @@ public OnGameFrame() {
 		}
 		
 		
-		if( g_fRestoreSpeed[client][0] < GetGameTime() && g_fRestoreSpeed[client][1] > 0.01 ) {
-			SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", g_fRestoreSpeed[client][1] );
+		if( g_fRestoreSpeed[client][0] < GetGameTime() && g_fRestoreSpeed[client][1] > 0.01 ) {			
+			g_flPlayerSpeed[client] = g_fRestoreSpeed[client][1];
 			g_fRestoreSpeed[client][1] = -1.0;
 		}
 		
+		SetClientSpeed(client, g_flPlayerSpeed[client]);
+		CTF_TP_ACTION(client);
+		
+		if( g_flCrazyTime[client] > GetGameTime() ) {
+			if( GetRandomInt(0, 15) == 1 ) {
+				
+				new Float:Origin[3];
+				new Float:Direction[3];
+				
+				GetClientAbsOrigin(client, Origin);
+				Origin[0] += GetRandomFloat(-255.0, 255.0);
+				Origin[0] += GetRandomFloat(-255.0, 255.0);
+				Origin[0] += GetRandomFloat( -50.0, 255.0);
+				
+				Direction[0] = GetRandomFloat();
+				Direction[1] = GetRandomFloat();
+				Direction[2] = GetRandomFloat();
+				
+				switch(GetRandomInt(1, 8)) {
+					case 1: {
+						new Model = PrecacheModel("materials/sprites/old_aexplo.vmt");
+						TE_SetupExplosion(Origin, Model, GetRandomFloat(0.5, 2.0), 2, 1, GetRandomInt(25, 100) , GetRandomInt(25, 100) );
+						TE_SendToClient(client);
+					}
+					case 2: {
+						TE_SetupDust(Origin, Direction, GetRandomFloat(50.0, 100.0), 10.0);
+						TE_SendToClient(client);
+					}
+					case 3: {
+						TE_SetupEnergySplash(Origin, Direction, true);
+						TE_SendToClient(client);
+					}
+					case 4: {
+						TE_SetupMetalSparks(Origin, Direction);
+						TE_SendToClient(client);
+					}
+					case 5: {
+						TE_SetupSparks(Origin, Direction, GetRandomInt(1, 10), GetRandomInt(1, 10));
+						TE_SendToClient(client);
+					}
+					case 6: {
+						TE_SetupArmorRicochet(Origin, Direction);
+						TE_SendToClient(client);
+					}
+					case 7: {
+						TE_SetupArmorRicochet(Origin, Direction);
+						TE_SendToClient(client);
+					}
+					case 8: {
+						TE_SetupArmorRicochet(Origin, Direction);
+						TE_SendToClient(client);
+					}
+					case 9: {
+						TE_SetupMetalSparks(Origin, Direction);
+						TE_SendToClient(client);
+					}
+					default: {
+						TE_SetupSparks(Origin, Direction, GetRandomInt(1, 10), GetRandomInt(1, 10));
+						TE_SendToClient(client);
+					}
+				}
+			}
+		}
+		
+		for(new i=0; i<MAX_BAGPACK; i++) {
+			if( g_BagPack_Data[i][bagpack_data] == 0 )
+				continue;
+			if( !IsValidEdict( g_BagPack_Data[i][bagpack_ent] ) )
+				continue;
+			if( !IsValidEntity( g_BagPack_Data[i][bagpack_ent] ) )
+				continue;
+			
+			
+			if( g_flBagPack_Last[i] >= GetGameTime() )
+				continue;
+			
+			GetEntPropVector(g_BagPack_Data[i][bagpack_ent], Prop_Send, "m_vecOrigin", vecOrigin2);
+			
+			
+			if( GetVectorDistance(vecOrigin, vecOrigin2) <= 50.0 ) {
+				
+				g_flBagPack_Last[i] = (GetGameTime() + 1.6);
+				
+				if( g_BagPack_Data[i][bagpack_type] == 1 ) {
+					CTF_FillupAmmunition(client, g_BagPack_Data[i][bagpack_ent], false);
+				}
+				else {
+					CTF_FillupAmmunition(client, g_BagPack_Data[i][bagpack_ent], true);
+				}
+				
+				break;
+			}
+		}
+		
+	}
+	
+	for(new client=1; client<=GetMaxClients(); client++) {
+		if( !IsValidClient(client) )
+			continue;
+		
 		if( g_iPlayerClass[client] == class_engineer ) {
-			if( IsValidSentry(g_iSentry[client]) ) {
-				CTF_SG_Think(client, g_iSentry[client]);
+			if( IsValidSentry( g_iBuild[client][build_sentry] ) ) {
+				CTF_SG_Think(client, g_iBuild[client][build_sentry]);
 			}
 		}
 	}
-	
 	CTF_FixAngles();
 }
 public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon) {
@@ -733,6 +956,11 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 //		Hooks - Map Call
 //
 public OnMapStart() {
+	
+	g_hBDD = SQL_Connect("default", true, g_szError, sizeof( g_szError ));
+	if( g_hBDD == INVALID_HANDLE ) {
+		SetFailState("Connexion impossible: %s", g_szError);
+	}
 	
 	AddFileToDownloadsTable("models/DeadlyDesire/ctf/flag.dx80.vtx");
 	AddFileToDownloadsTable("models/DeadlyDesire/ctf/flag.vvd");
@@ -801,7 +1029,6 @@ public OnMapStart() {
 	
 	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.dx80.vtx");
 	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.dx90.vtx");
-	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.mdl");
 	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.phy");
 	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.sw.vtx");
 	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.vvd");
@@ -843,10 +1070,11 @@ public OnMapStart() {
 	AddFileToDownloadsTable("models/weapons/w_models/w_medigun.sw.vtx");
 	AddFileToDownloadsTable("models/weapons/w_models/w_medigun.vvd");
 	//
-	AddFileToDownloadsTable("maps/ctf_schtop_particles.txt");
 	AddFileToDownloadsTable("particles/ctf_01.pcf");
 	AddFileToDownloadsTable("particles/ctf_02.pcf");
 	AddFileToDownloadsTable("particles/ctf_03.pcf");
+	AddFileToDownloadsTable("particles/ctf_04.pcf");
+	AddFileToDownloadsTable("particles/ctf_05.pcf");
 	//
 	AddFileToDownloadsTable("materials/effects/softglow.vtf");
 	AddFileToDownloadsTable("materials/effects/medicbeam_curl.vmt");
@@ -865,6 +1093,16 @@ public OnMapStart() {
 	AddFileToDownloadsTable("materials/particle/flameThrowerFire/flamethrowerfire102.vtf");
 	AddFileToDownloadsTable("materials/particle/flameThrowerFire/flamethrowerfire102.vmt");
 	//
+	AddFileToDownloadsTable("materials/effects/circle1.vtf");
+	AddFileToDownloadsTable("materials/effects/softglow.vtf");
+	AddFileToDownloadsTable("materials/effects/circle1.vmt");
+	AddFileToDownloadsTable("materials/effects/circle2.vtf");
+	AddFileToDownloadsTable("materials/effects/softglow.vmt");
+	AddFileToDownloadsTable("materials/effects/circle.vmt");
+	AddFileToDownloadsTable("materials/effects/tp_floorglow.vmt");
+	AddFileToDownloadsTable("materials/effects/tp_floorglow.vtf");
+	AddFileToDownloadsTable("materials/effects/circle.vtf");
+	AddFileToDownloadsTable("materials/effects/circle2.vmt");
 	//
 	AddFileToDownloadsTable("models/grenades/emp/emp.dx80.vtx");
 	AddFileToDownloadsTable("models/grenades/emp/emp.mdl");
@@ -1000,6 +1238,77 @@ public OnMapStart() {
 	PrecacheModel("models/grenades/caltrop/caltrop.mdl", true);
 	PrecacheModel("models/projectiles/nail/w_nail.mdl", true);
 	//
+
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/base1.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/base1.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/sentry1_blue.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/Sentry1_blue.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/Sentry1_exponent.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/Sentry1_lightwarp.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/Sentry1_normal.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/sentry1.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/sentry1/Sentry1.vtf");
+
+	AddFileToDownloadsTable("materials/models/buildables/sentry2/base1.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/sentry2/Sentry2_blue.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/sentry2/Sentry2_blue.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry2/Sentry2_exponent.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry2/Sentry2_lightwarp.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry2/Sentry2_normal.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/sentry2/Sentry2.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/sentry2/Sentry2.vtf");
+	
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/teleporter_blue.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/teleporter_blue.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/teleporterspin_blue.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/teleporterspin_red.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/teleporter.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/teleporter.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/teleportspin_blue.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/teleportspin_red.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_direction1.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_direction1.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_direction.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_direction.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_lights_blue.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_lights_red.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_sheet1.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_sheet1.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_sheet2.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_sheet2.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_sheet_blue.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_sheet_blue.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_sheet_red.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/teleporter/tp_sheet_red.vtf");
+
+	AddFileToDownloadsTable("materials/models/buildables/toolbox/toolbox_blue.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/toolbox/toolbox_blue.vtf");
+	AddFileToDownloadsTable("materials/models/buildables/toolbox/toolbox_red.vmt");
+	AddFileToDownloadsTable("materials/models/buildables/toolbox/toolbox_red.vtf");
+	
+	AddFileToDownloadsTable("models/buildables/sentry1.dx80.vtx");
+	AddFileToDownloadsTable("models/buildables/sentry1.dx90.vtx");
+	AddFileToDownloadsTable("models/buildables/sentry1.mdl");
+	AddFileToDownloadsTable("models/buildables/sentry1.phy");
+	AddFileToDownloadsTable("models/buildables/sentry1.sw.vtx");
+	AddFileToDownloadsTable("models/buildables/sentry1.vvd");
+	AddFileToDownloadsTable("models/buildables/sentry2.dx80.vtx");
+	AddFileToDownloadsTable("models/buildables/sentry2.dx90.vtx");
+	AddFileToDownloadsTable("models/buildables/sentry2.mdl");
+	AddFileToDownloadsTable("models/buildables/sentry2.phy");
+	AddFileToDownloadsTable("models/buildables/sentry2.sw.vtx");
+	AddFileToDownloadsTable("models/buildables/sentry2.vvd");
+	AddFileToDownloadsTable("models/buildables/teleporter_light.dx80.vtx");
+	AddFileToDownloadsTable("models/buildables/teleporter_light.dx90.vtx");
+	AddFileToDownloadsTable("models/buildables/teleporter_light.mdl");
+	AddFileToDownloadsTable("models/buildables/teleporter_light.phy");
+	AddFileToDownloadsTable("models/buildables/teleporter_light.sw.vtx");
+	AddFileToDownloadsTable("models/buildables/teleporter_light.vvd");
+
+	PrecacheModel("models/buildables/sentry1.mdl", true);
+	PrecacheModel("models/buildables/sentry2.mdl", true);
+	PrecacheModel("models/buildables/teleporter_light.mdl", true);
+	//
 	PrecacheSound("weapons/rpg/rocket1.wav", true);
 	PrecacheSound("weapons/rpg/rocketfire1.wav", true);
 	
@@ -1030,12 +1339,22 @@ public OnMapStart() {
 	PrecacheSound("grenades/napalm_explode.wav", true);
 	PrecacheSound("grenades/bounce.wav", true);
 	
+	
+	PrecacheSound("npc/turret_floor/shoot1.wav", true);
+	PrecacheSound("npc/turret_floor/shoot2.wav", true);
+	PrecacheSound("npc/turret_floor/shoot3.wav", true);
+	PrecacheSound("npc/turret_floor/die.wav", true);
+	PrecacheSound("npc/turret_floor/deploy.wav", true);
+	PrecacheSound("npc/turret_floor/retract.wav", true);
+	PrecacheSound("npc/turret_floor/alarm.wav", true);
+	
 	g_cPhysicBeam = PrecacheModel("materials/Sprites/physbeam.vmt");
 	g_cShockWave = PrecacheModel("materials/effects/concrefract.vmt");
 	g_cShockWave2 = PrecacheModel("materials/sprites/rollermine_shock.vmt");
 	g_cSmokeBeam = PrecacheModel("materials/sprites/xbeam2.vmt");
 	g_cExplode = PrecacheModel("materials/sprites/old_aexplo.vmt");
 	g_cScorch = PrecacheModel("materials/decals/smscorch1.vmt", true);
+	if( g_cScorch ) { }
 	//
 	//
 	ServerCommand("mp_ignore_round_win_conditions 1");
@@ -1047,4 +1366,11 @@ public OnMapStart() {
 	CTF_WEAPON_init();
 	CTF_LoadFlag();
 	
+	
+	PrecacheParticleSystem("teleportedin_blue");
+	PrecacheParticleSystem("teleportedin_red");
+}
+public OnMapEnd() {
+	
+	CloseHandle(g_hBDD);
 }

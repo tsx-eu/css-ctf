@@ -39,6 +39,10 @@ public CTF_WEAPON_CUSTOM_FRAME(client) {
 				ent = CreateEntityByName("prop_dynamic");
 				SetEntityModel(ent, g_szCustomWeapon_model[class]);
 				
+				if( GetClientTeam(client) == CS_TEAM_CT ) {
+					DispatchKeyValue(ent, "Skin", "1");
+				}
+				
 				DispatchKeyValue(ent, "disableshadows", "1");
 				DispatchKeyValue(ent, "nodamageforces", "1");
 				DispatchKeyValue(ent, "spawnflags", "6");
@@ -96,6 +100,10 @@ public CTF_WEAPON_CUSTOM_CLEAN(client) {
 public Action:CTF_WEAPON_CUSTOM_ACTION(client, &buttons) {
 	if( !IsPlayerAlive(client) )
 		return Plugin_Continue;
+	
+	if( g_iCustomWeapon_Entity[client][1] == -1 ) {
+		return Plugin_Continue;
+	}
 	
 	if( g_iPlayerClass[client] == class_soldier ) {
 		new WeaponIndex = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
@@ -513,7 +521,7 @@ public CTF_WEAPON_MEDIC_Attack_1(client) {
 		
 		new target = g_iCustomWeapon_Entity2[client][2];
 		
-		new health = (GetClientHealth(target) + 1);
+		new health = (GetClientHealth(target) + GetRandomInt(2, 3));
 		
 		if( Entity_GetMaxHealth(target) >= health ) {
 			SetEntityHealth(target, health);
@@ -700,8 +708,8 @@ public CTF_WEAPON_FLAME_Attack_1(client) {
 		CTF_WEAPON_FLAME_Fire(client, false);
 		g_iCustomWeapon_Ammo[client][0]--;
 		
-		g_fCustomWeapon_NextShoot[client][0] = (GetGameTime() + 0.2);
-		g_fCustomWeapon_NextShoot[client][2] = (GetGameTime() + 0.2);
+		g_fCustomWeapon_NextShoot[client][0] = (GetGameTime() + 0.075);
+		g_fCustomWeapon_NextShoot[client][2] = (GetGameTime() + 0.075);
 		
 		if( g_iCustomWeapon_Ammo[client][0] <= 0 ) {
 			
@@ -737,61 +745,61 @@ public Action:CTF_WEAPON_FLAME_Reload_Task(Handle:timer, any:client) {
 }
 public CTF_WEAPON_FLAME_Fire(client, shutdown) {
 	
-	new Float:vecOrigin[3], Float:vecAngles[3], Float:vecTarget[3], String:ParentName[64];
+	if( !shutdown ) {
+		new Float:vecOrigin[3], Float:vecAngles[3], Float:vecVelocity[3];
+		
+		GetClientEyePosition(client, vecOrigin);
+		GetClientEyeAngles(client, vecAngles);
+		
+		new Float:rad = degrees_to_radians(vecAngles[1]);
+		
+		vecOrigin[0] = (vecOrigin[0] - (0.0 * Sine(rad))   + (80.0 * Cosine(rad)) );
+		vecOrigin[1] = (vecOrigin[1] + (0.0 * Cosine(rad)) + (80.0 * Sine(rad)) );
+		vecOrigin[2] = (vecOrigin[2] - 10.0);
+		
+		new String:classname[128];
+		Format(classname, sizeof(classname), "ctf_flame_%i", client);
+		
+		new ent = CreateEntityByName("flashbang_projectile");
+		
+		DispatchKeyValue(ent, "classname", classname);
+		DispatchKeyValue(ent, "solid", "0");
+		DispatchSpawn(ent);
+		ActivateEntity(ent);
+		SetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity", client);
+		SetEntPropFloat(ent, Prop_Send, "m_flElasticity", 0.2);
+		
+		new Float:fMins[3] = {-15.0, -15.0, -15.0};
+		new Float:fMaxs[3] = {15.0, 15.0, 15.0};
+		
+		SetEntPropVector( ent, Prop_Send, "m_vecMins", fMins);
+		SetEntPropVector( ent, Prop_Send, "m_vecMaxs", fMaxs);
+		
+		SetEntityMoveType(ent, MOVETYPE_FLY);
+		SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_NONE);
+		SetEntProp(ent, Prop_Data, "m_MoveCollide", 0);
+		
+		GetAngleVectors(vecAngles, vecVelocity, NULL_VECTOR, NULL_VECTOR);
+		ScaleVector(vecVelocity, 800.0);
+		
+		TeleportEntity(ent, vecOrigin, vecAngles, vecVelocity);
+		Colorize(ent, 0, 0, 0, 0);
+		
+		SheduleEntityInput(ent, 0.3, "Kill");
+		AttachParticle(ent, "fire_small_03", 0.40); // fire_medium_02 - fire_small_0£
+		
+		g_flCustomWeapon_Entity3[ent] = (GetGameTime() + 0.1);
+		SDKHook(ent, SDKHook_Touch, CTF_WEAPON_FLAME_TOUCH);
+		SDKHook(ent, SDKHook_ShouldCollide, ShouldCollide);
+	}
+}
+public CTF_WEAPON_FLAME_TOUCH(rocket, entity) {
 	
-	GetClientAbsOrigin(client, vecOrigin);
-	GetClientEyeAngles(client, vecAngles);	
-	
-	vecTarget[0] = 30.0;
-	vecTarget[1] = -10.0;
-	vecTarget[2] = 60.0;
-		
-	if( shutdown ) {
-		
-		if( g_iCustomWeapon_Entity2[client][0] > 0 && IsValidEdict(g_iCustomWeapon_Entity2[client][0]) && IsValidEntity(g_iCustomWeapon_Entity2[client][0]) ) {
-			
-			AcceptEntityInput(g_iCustomWeapon_Entity2[client][0], "Kill");
-			g_iCustomWeapon_Entity2[client][0] = -1;
-		}
-		
+	if( !IsValidClient(entity) ) {
 		return;
 	}
 	
-	if( g_iCustomWeapon_Entity2[client][0] > 0 && IsValidEdict(g_iCustomWeapon_Entity2[client][0]) && IsValidEntity(g_iCustomWeapon_Entity2[client][0]) ) {
-		
-		new Float:fThreshold = (20.0 * PI/360.0);
-		
-		for(new i=1; i<=GetMaxClients(); i++) {
-			if( !IsValidClient(i) )
-				continue;
-			if( !IsPlayerAlive(i) )
-				continue;
-			
-			if( ClientViews(client, i, 300.0, fThreshold) ) {
-				DealDamage(i, GetRandomInt(4, 10), client, DMG_BURN);
-				g_iBurning[i] = client;
-			}
-		}
-		return;
-	}
-	
-	
-	new ent = CreateEntityByName("info_particle_system");
-	DispatchKeyValue(ent, "effect_name", "flamethrower");
-	DispatchSpawn(ent);
-	
-	TeleportEntity(ent, vecOrigin, vecAngles, NULL_VECTOR);
-	
-	DispatchKeyValue(ent, "start_active", "1");
-	ActivateEntity(ent);
-	
-	Format(ParentName, sizeof(ParentName), "ctf_pyro_%i%i%i", client, ent, GetRandomInt(11111, 99999) );
-	DispatchKeyValue(client, "targetname", ParentName);
-	
-	SetVariantString(ParentName);
-	AcceptEntityInput(ent, "SetParent");
-	
-	TeleportEntity(ent, vecTarget, NULL_VECTOR, NULL_VECTOR);
-	
-	g_iCustomWeapon_Entity2[client][0] = ent;
+	IgniteEntity(entity, 5.0);
+	DealDamage(entity, GetRandomInt(8, 12), GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"), DMG_BURN);
+	RemoveEdict(rocket);
 }

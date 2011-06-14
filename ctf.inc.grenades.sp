@@ -12,6 +12,9 @@ public Action:Cmd_PlusGren1(client, args) {
 	if( g_iPlayerGrenadeAmount[client][0] <= 0 )
 		return Plugin_Handled;
 	
+	if( !IsPlayerAlive(client) )
+		return Plugin_Handled;
+	
 	g_iGrenadeType[client] = grenade_none;
 	
 	switch( g_iPlayerClass[client] ) {
@@ -62,6 +65,9 @@ public Action:Cmd_PlusGren2(client, args) {
 	if( g_iPlayerGrenadeAmount[client][1] <= 0 )
 		return Plugin_Handled;
 	
+	if( !IsPlayerAlive(client) )
+		return Plugin_Handled;
+	
 	g_iGrenadeType[client] = grenade_none;
 	
 	switch( g_iPlayerClass[client] ) {
@@ -84,7 +90,7 @@ public Action:Cmd_PlusGren2(client, args) {
 			g_iGrenadeType[client] = grenade_mirv;
 		}
 		case class_pyro: {
-			g_iGrenadeType[client] = grenade_napalm;
+			g_iGrenadeType[client] = grenade_none;
 		}
 		case class_spy: {
 			g_iGrenadeType[client] = grenade_gas;
@@ -167,9 +173,9 @@ public CTF_NADE_CaptropTouch(ent, victim) {
 		
 		g_fRestoreSpeed[victim][0] = (GetGameTime() + 2.0);
 		if( g_fRestoreSpeed[victim][1] < 0.01 ) {
-			g_fRestoreSpeed[victim][1] = GetEntPropFloat(victim, Prop_Data, "m_flLaggedMovementValue");
+			g_fRestoreSpeed[victim][1] = g_flPlayerSpeed[victim];
 		}
-		SetEntPropFloat(victim, Prop_Data, "m_flLaggedMovementValue", 0.25);
+		g_flPlayerSpeed[victim] = 100.0;
 		
 		AcceptEntityInput(ent, "KillHierarchy");
 	}
@@ -359,29 +365,16 @@ public CTF_NADE_EXPL_Caltrop(client, entity, ent, Float:vecOrigin[3]) {
 public CTF_NADE_EXPL_Conc(client, entity, ent, Float:vecOrigin[3]) {
 	
 	if( IsValidEntity(entity) ) {
-		MakeRadiusPush(vecOrigin, 800.0, 800.0);
-		
+		ConcExplode(client, entity, false);
 	}
 	else {
-		
-		new Float:vecOrigin2[3], Float:vecAngles[3], Float:vecVelocity[3];
-		GetClientEyePosition(client, vecOrigin2);
-		GetClientEyeAngles(client, vecAngles);
-		Entity_GetAbsVelocity(client, vecVelocity);
-		
-		new Float:dist = GetVectorLength(vecVelocity) * 0.1;
-		
-		vecOrigin2[0] = (vecOrigin[0] - (dist * Cosine(degrees_to_radians(vecAngles[1]))) );
-		vecOrigin2[1] = (vecOrigin[1] - (dist * Sine(degrees_to_radians(vecAngles[1]))) );
-		vecOrigin2[2] = (vecOrigin[2] - ((dist*-1.5) * Sine(degrees_to_radians(vecAngles[0]))) );
-		
-		MakeRadiusPush(vecOrigin2, 800.0, 800.0);
+		ConcExplode(client, client, true);
 	}
 	vecOrigin[2] += 25.0;
 	
-	TE_SetupBeamRingPoint(vecOrigin, 1.0, 601.0, g_cShockWave, 0, 0, 10, 0.25, 50.0, 0.0, {255, 255, 255, 255}, 1, 0);
+	TE_SetupBeamRingPoint(vecOrigin, 1.0, 285.0, g_cShockWave, 0, 0, 10, 0.25, 50.0, 0.0, {255, 255, 255, 255}, 1, 0);
 	TE_SendToAll();
-	TE_SetupBeamRingPoint(vecOrigin, 0.1, 600.0, g_cShockWave2, 0, 0, 10, 0.25, 50.0, 0.0, {255, 255, 255, 200}, 1, 0);
+	TE_SetupBeamRingPoint(vecOrigin, 0.1, 288.0, g_cShockWave2, 0, 0, 10, 0.25, 50.0, 0.0, {255, 255, 255, 200}, 1, 0);
 	TE_SendToAll();
 	
 	new String:sound[128];
@@ -396,6 +389,140 @@ public CTF_NADE_EXPL_Conc(client, entity, ent, Float:vecOrigin[3]) {
 		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"0\"", entity);
 	}
 }
+public ConcExplode(client, concId, bool:handHeld) {
+	new Float:center[3];
+	GetEntPropVector(concId, Prop_Send, "m_vecOrigin", center);
+	
+	for (new i=1; i<=GetMaxClients(); i++) {
+		
+		if( !IsValidClient(i) )
+			continue;
+		
+		new Float:vecOrigin[3];
+		GetClientAbsOrigin(i, vecOrigin);
+		
+		if( GetVectorDistance(vecOrigin, center) > 280.0 )
+			continue;
+		
+		ConcPlayer(i, center, client, handHeld);
+	}
+}
+public ConcPlayer(victim, Float:center[3], attacker, bool:hh) {
+	/*
+	new Float:pSpd[3], Float:cPush[3], Float:pPos[3], Float:distance, Float:pointDist, Float:calcSpd, Float:baseSpd;
+	
+	GetClientAbsOrigin(victim, pPos);
+	pPos[2] += 48.0;
+	
+	GetEntPropVector(victim, Prop_Data, "m_vecVelocity", pSpd);
+	distance = GetVectorDistance(pPos, center);
+	
+	SubtractVectors(pPos, center, cPush);
+	NormalizeVector(cPush, cPush);
+	pointDist = FloatDiv(distance, radius);
+	
+	baseSpd = 650.0;
+	
+	if( 0.25 > pointDist ) {
+		pointDist = 0.25;
+	}
+	
+	calcSpd = baseSpd * pointDist;
+
+	calcSpd = -1.0*Cosine( (calcSpd / baseSpd) * 3.141592 ) * ( baseSpd - (800.0 / 3.0) ) + ( baseSpd + (800.0 / 3.0) );
+
+	ScaleVector(cPush, calcSpd);
+	new bool:OnGround;
+	if(GetEntityFlags(victim) & FL_ONGROUND){
+		OnGround = true;
+	}
+	else {
+		OnGround = false;
+	}
+	if( (hh && victim != attacker) || !hh) {
+		if( pSpd[2] < 0.0 && cPush[2] > 0.0 ) {
+			pSpd[2] = 0.0;
+		}
+	}
+
+	AddVectors(pSpd, cPush, pSpd);
+	if(OnGround) {
+		if(pSpd[2] < 800.0/3.0) {
+			pSpd[2] = 800.0/3.0;
+		}
+	}
+	
+	TeleportEntity(victim, NULL_VECTOR, NULL_VECTOR, pSpd);
+	
+	new Float:vecAngles[3];
+	vecAngles[0] = 50.0;
+	vecAngles[1] = 50.0;
+	vecAngles[2] = 50.0;
+	
+	SetEntPropVector(victim, Prop_Send, "m_vecPunchAngle", vecAngles);
+	SetEntPropFloat(victim, Prop_Send, "m_flFlashDuration", 5.0);
+	SetEntPropFloat(victim, Prop_Send, "m_flFlashMaxAlpha", 50.0);
+	*/
+	
+	new Float:vecPlayerOrigin[3], Float:vecResult[3];
+	GetClientAbsOrigin(victim, vecPlayerOrigin);
+	
+	new Float:vecDisplacement[3];
+	vecDisplacement[0] = vecPlayerOrigin[0] - center[0];
+	vecDisplacement[1] = vecPlayerOrigin[1] - center[1];
+	vecDisplacement[2] = vecPlayerOrigin[2] - center[2];
+	
+	new Float:flDistance = GetVectorLength(vecDisplacement);
+	
+	if( hh && attacker == victim) {
+		new Float:fLateral = 2.74;
+		new Float:fVertical = 4.10;
+		
+		new Float:vecVelocity[3];
+		GetEntPropVector(victim, Prop_Data, "m_vecVelocity", vecVelocity);
+		
+		new Float:vecLatVelocity[3];
+		vecLatVelocity[0] = vecVelocity[0] * 1.0;
+		vecLatVelocity[1] = vecVelocity[1] * 1.0;
+		vecLatVelocity[2] = vecVelocity[2] * 0.0;
+		
+		new Float:flHorizontalSpeed = GetVectorLength(vecLatVelocity);
+		
+		vecResult[0] = vecVelocity[0] * fLateral;
+		vecResult[1] = vecVelocity[1] * fLateral;
+		vecResult[2] = vecVelocity[2] * fVertical;
+		
+	}
+	else {
+		
+		new Float:verticalDistance = vecDisplacement[2];
+		vecDisplacement[2] = 0.0;
+		new Float:horizontalDistance = GetVectorLength(vecDisplacement);
+		
+		vecDisplacement[0] /= horizontalDistance;
+		vecDisplacement[1] /= horizontalDistance;
+		vecDisplacement[2] /= horizontalDistance;
+		
+		vecDisplacement[0] *= (horizontalDistance * (8.4 - 0.015 * flDistance) );
+		vecDisplacement[1] *= (horizontalDistance * (8.4 - 0.015 * flDistance) );
+		vecDisplacement[2] = (verticalDistance * (12.6 - 0.0225 * flDistance) );
+		
+		vecResult[0] = vecDisplacement[0];
+		vecResult[1] = vecDisplacement[1];
+		vecResult[2] = vecDisplacement[2];		
+	}
+	
+	TeleportEntity(victim, NULL_VECTOR, NULL_VECTOR, vecResult);
+	
+	new Float:vecAngles[3];
+	vecAngles[0] = 50.0;
+	vecAngles[1] = 50.0;
+	vecAngles[2] = 50.0;
+	
+	SetEntPropVector(victim, Prop_Send, "m_vecPunchAngle", vecAngles);
+	SetEntPropFloat(victim, Prop_Send, "m_flFlashDuration", 5.0);
+	SetEntPropFloat(victim, Prop_Send, "m_flFlashMaxAlpha", 50.0);
+}
 public CTF_NADE_EXPL_Frag(client, entity, ent, Float:vecOrigin[3]) {
 	
 	ExplosionDamage(vecOrigin, 100.0, 400.0, client);
@@ -408,7 +535,7 @@ public CTF_NADE_EXPL_Frag(client, entity, ent, Float:vecOrigin[3]) {
 	
 	if( entity != -1 ) {
 		SheduleEntityInput(entity, 0.25, "KillHierarchy");
-		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"0\"", entity);
+		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"1\"", entity);
 	}
 }
 public CTF_NADE_EXPL_Nail(client, entity, ent, Float:vecOrigin[3]) {
@@ -418,8 +545,11 @@ public CTF_NADE_EXPL_Nail(client, entity, ent, Float:vecOrigin[3]) {
 	}
 	if( entity != -1 ) {
 		
+		SetEntityMoveType(ent, MOVETYPE_NONE);
+		
+		new Float:vecVelocity[3];
 		vecOrigin[2] += 50.0;
-		TeleportEntity(entity, vecOrigin, NULL_VECTOR, NULL_VECTOR);
+		TeleportEntity(entity, vecOrigin, NULL_VECTOR, vecVelocity);
 		
 		g_flNailData[entity][0] = 0.0;
 		g_flNailData[entity][1] = (GetGameTime() + 0.1);
@@ -439,49 +569,58 @@ public Action:CTF_NADE_EXPL_Nail_Task(Handle:timer, any:entity) {
 	TE_SendToAll();
 }
 public CTF_NADE_NAIL_Shoot(entity) {
+	new Float:vecOrigin[3], Float:vecAngles[3], Float:vecDest[3];
 	
-	new client = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
-	
-	new Float:vecOrigin[3], Float:vecAngles[3], Float:vecVelocity[3];
+	new attacker = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
 	
 	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", vecOrigin);
-	g_flNailData[entity][0] += GetRandomFloat(4.0, 6.0);
-	g_flNailData[entity][1] += GetRandomFloat(0.08, 0.12);
+	g_flNailData[entity][0] += GetRandomFloat(2.0, 4.0);
+	g_flNailData[entity][1] = (GetGameTime() + GetRandomFloat(0.01, 0.02));
 	
 	vecAngles[1] = g_flNailData[entity][0];
 	while( vecAngles[1] >= 360.0 ) {
 		vecAngles[1] -= 360.0;
 	}
 	
-	vecOrigin[0] = (vecOrigin[0] + (5.0 * Cosine( degrees_to_radians(vecAngles[1]) )) );
-	vecOrigin[1] = (vecOrigin[1] + (5.0 * Sine( degrees_to_radians(vecAngles[1]))));
+	TeleportEntity(entity, NULL_VECTOR, vecAngles, NULL_VECTOR);
 	
-	new ent = CreateEntityByName("flashbang_projectile");
+	new Float:old_angle = vecAngles[1];
 	
-	DispatchSpawn(ent);
-	ActivateEntity(ent);
-	SetEntityModel(ent, "models/projectiles/nail/w_nail.mdl");
-	SetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity", client);
-	
-	SetEntityMoveType(ent, MOVETYPE_FLY);
-	SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PROJECTILE);
-	
-	GetAngleVectors(vecAngles, vecVelocity, NULL_VECTOR, NULL_VECTOR);
-	ScaleVector(vecVelocity, 1200.0);
-	
-	TeleportEntity(ent, vecOrigin, vecAngles, vecVelocity);
-	
-	SDKHook(ent, SDKHook_Touch, CTF_NADE_NAIL_Shoot_TOUCH);
-	
-	EmitSoundToAll("grenades/nail_shoot.wav", ent);
-}
-public CTF_NADE_NAIL_Shoot_TOUCH(entity, touched) {
-	
-	if( IsValidClient(touched) ) {
-		DealDamage(touched, GetRandomInt(14, 16), GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity"));
+	for(new i=1; i<=3; i++) {
+		
+		vecAngles[1] += 120.0;
+		
+		GetEntPropVector(entity, Prop_Send, "m_vecOrigin", vecOrigin);
+		vecOrigin[0] = (vecOrigin[0] + (5.0 * Cosine( degrees_to_radians(vecAngles[1]) )) );
+		vecOrigin[1] = (vecOrigin[1] + (5.0 * Sine( degrees_to_radians(vecAngles[1]))));
+		
+		TE_SetupMuzzleFlash(vecOrigin, vecAngles, 1.0, 1);
+		TE_SendToAll();
+		
+		new Handle:trace = TR_TraceRayFilterEx(vecOrigin, vecAngles, MASK_SHOT, RayType_Infinite, FilterToOne, entity);
+		if( !TR_DidHit(trace) ) {
+			return;
+		}
+		
+		new victim = TR_GetEntityIndex(trace);
+		TR_GetEndPosition(vecDest, trace);
+		
+		CloseHandle(trace);
+		
+		if( GetClientTeam( attacker ) == CS_TEAM_T ) {
+			TE_SetupBeamPoints( vecOrigin, vecDest, g_cPhysicBeam, 0, 0, 0, 0.1, 3.0, 3.0, 1, 0.0, {250, 200, 200, 20}, 0);
+		}
+		else {
+			TE_SetupBeamPoints( vecOrigin, vecDest, g_cPhysicBeam, 0, 0, 0, 0.1, 3.0, 3.0, 1, 0.0, {200, 200, 250, 20}, 0);
+		}
+		TE_SendToAll();
+		
+		if( IsValidClient(victim) ) {
+			DealDamage(victim, GetRandomInt(4, 8), attacker);
+		}
 	}
 	
-	AcceptEntityInput(entity, "KillHierarchy");
+	vecAngles[1] = old_angle;
 }
 public CTF_NADE_EXPL_Mirv(client, entity, ent, Float:vecOrigin[3]) {
 	
@@ -507,7 +646,7 @@ public CTF_NADE_EXPL_Mirv(client, entity, ent, Float:vecOrigin[3]) {
 	
 	if( entity != -1 ) {
 		SheduleEntityInput(entity, 0.25, "KillHierarchy");
-		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"0\"", entity);
+		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"1\"", entity);
 	}
 }
 public CTF_NADE_EXPL_MirvLet(client, entity, ent, Float:vecOrigin[3]) {
@@ -522,14 +661,14 @@ public CTF_NADE_EXPL_MirvLet(client, entity, ent, Float:vecOrigin[3]) {
 	
 	if( entity != -1 ) {
 		SheduleEntityInput(entity, 0.25, "KillHierarchy");
-		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"0\"", entity);
+		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"1\"", entity);
 	}
 }
 public CTF_NADE_EXPL_Napalm(client, entity, ent, Float:vecOrigin[3]) {
 	
 	if( entity != -1 ) {
 		SheduleEntityInput(entity, 0.25, "KillHierarchy");
-		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"0\"", entity);
+		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"1\"", entity);
 	}
 }
 public CTF_NADE_EXPL_Gas(client, entity, ent, Float:vecOrigin[3]) {
@@ -606,21 +745,24 @@ public Action:CTF_NADE_EXPL_EMP_Task(Handle:timer, any:ent) {
 		
 		damage += float(g_iPlayerArmor[i]);
 		
-		TE_SetupExplosion(vecOrigin2, g_cExplode, 1.0, 0, 0, 40, 40);
+		g_iPlayerArmor[i] = RoundToCeil(float(g_iPlayerArmor[i]) * 0.5);
+		
+		TE_SetupExplosion(vecOrigin2, g_cExplode, 1.0, 0, 0, 25, 25);
 		TE_SendToAll();
 	}
 	
 	ExplosionDamage(vecOrigin, damage, 600.0, client);
-	
 	vecOrigin[2] += 25.0;
 	
-	TE_SetupBeamRingPoint(vecOrigin, 1.0, 601.0, g_cShockWave, 0, 0, 10, 0.20, 50.0, 0.0, {255, 255, 255, 255}, 1, 0);
+	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 40, 40);
 	TE_SendToAll();
-	TE_SetupBeamRingPoint(vecOrigin, 0.1, 600.0, g_cPhysicBeam, 0, 0, 10, 0.20, 50.0, 0.0, {255, 200, 50, 200}, 1, 0);
+	TE_SetupBeamRingPoint(vecOrigin, 1.0, 401.0, g_cShockWave, 0, 0, 20, 0.20, 50.0, 0.0, {255, 255, 255, 255}, 1, 0);
+	TE_SendToAll();
+	TE_SetupBeamRingPoint(vecOrigin, 0.1, 400.0, g_cPhysicBeam, 0, 0, 10, 0.20, 50.0, 0.0, {255, 200, 50, 200}, 1, 0);
 	TE_SendToAll();
 	
 	if( entity != -1 ) {
 		SheduleEntityInput(entity, 0.25, "KillHierarchy");
-		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"0\"", entity);
+		ServerCommand("sm_effect_fading \"%i\" \"0.25\" \"1\"", entity);
 	}
 }

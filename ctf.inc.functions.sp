@@ -4,6 +4,13 @@
 #define _ctf_functions_included
 
 #include "ctf.sp"
+#include "ctf.inc.const.sp"
+#include "ctf.inc.events.sp"
+#include "ctf.inc.functions.sp"
+#include "ctf.inc.classes.sp"
+#include "ctf.inc.weapons.sp"
+#include "ctf.inc.sentry.sp"
+#include "ctf.inc.grenades.sp"
 
 // ------------------------------------------------------------------------------------------------------------------
 // 		CTF GLOBAL FUNCTIONS
@@ -12,7 +19,15 @@
 // ------------------------------------------------------------------------------------------------------------------
 //	Utilisé pour drop un drapeau à partir d'un joueur à sa mort.
 //
-
+stock SetClientSpeed(client, Float:speed) {
+	speed = (speed / 240.0);
+	SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", speed);
+	
+	if( speed == 0.0 ) {
+		speed = 0.0001;
+	}
+	SetEntityGravity(client, (1.0/speed) );
+}
 stock CTF_DropFlag(client, thrown=false) {
 	new iFlagType = -1;
 	for(new Flag_Type = 0; Flag_Type<=2; Flag_Type++) {
@@ -176,11 +191,14 @@ public CTF_Score(client, Flag_Type, Reverse_Flag_Type) {
 	
 	Format(szSound, sizeof(szSound), "play \"DeadlyDesire/ctf/");
 	
-	PrintToChatAll("%N Capture le drapeau.", client);
-	PrintToChatAll("*** Score: %i - %i", g_iScore[0], g_iScore[1]);
+	PrintToChatAll("[CTF] %N capture le drapeau.", client);
+	PrintToChatAll("[CTF] Scores: %i - %i", g_iScore[0], g_iScore[1]);
 	
+	SetClientFrags(client, (GetClientFrags(client)+10) );
+	SetTeamScore( GetClientTeam(client), g_iScore[Reverse_Flag_Type]);
 	// Si une équipe remporte la victoire:
 	// --------------
+	/*
 	if( g_iScore[Flag_Type] == 0 && g_iScore[Reverse_Flag_Type] == 3 ) {
 		for(new i=1; i<=GetMaxClients(); i++) {
 			if( !IsValidClient(i) ) 
@@ -210,16 +228,16 @@ public CTF_Score(client, Flag_Type, Reverse_Flag_Type) {
 		
 		return;
 	}
+	*/
 	//
 	// --------------------
-	if( g_iScore[Flag_Type] == 0 && g_iScore[Reverse_Flag_Type] == 2 ) {
-		Format(szSound, sizeof(szSound), "%s%sTeamIncreasesTheirLead.mp3\"", szSound, szTeam);
-	}
-	else if( g_iScore[Flag_Type] == 1 && g_iScore[Reverse_Flag_Type] == 2 ) {
+	if( (g_iScore[Flag_Type]+1) == g_iScore[Reverse_Flag_Type] ) {
 		Format(szSound, sizeof(szSound), "%s%sTeamTakesTheLead.mp3\"", szSound, szTeam);
 	}
+	else if( (g_iScore[Flag_Type]+2) == g_iScore[Reverse_Flag_Type] ) {
+		Format(szSound, sizeof(szSound), "%s%sTeamIncreasesTheirLead.mp3\"", szSound, szTeam);
+	}
 	else  {
-		
 		Format(szSound, sizeof(szSound), "%s%sTeamScores.mp3\"", szSound, szTeam);
 	}
 	
@@ -312,7 +330,7 @@ stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index) {
 			continue;
 		if( !IsValidEntity(i) )
 			continue;
-		if( !IsMoveAble(i) && !IsValidSentry(i) )
+		if( !IsMoveAble(i) && !IsValidSentry(i) && !IsValidTeleporter(i) )
 			continue;
 		
 		GetEntPropVector(i, Prop_Send, "m_vecOrigin", PlayerVec);
@@ -348,9 +366,23 @@ stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index) {
 		DealDamage(i, RoundFloat(dmg), index);
 	}
 	
-	ULTI_TraceDecal(origin, g_cScorch);
+	new ExplosionIndex = CreateEntityByName("env_explosion");
+	if (ExplosionIndex != -1) {
+		
+		SetEntProp(ExplosionIndex, Prop_Data, "m_spawnflags", 2031);
+		SetEntProp(ExplosionIndex, Prop_Data, "m_iMagnitude", 100.0);
+		SetEntProp(ExplosionIndex, Prop_Data, "m_iRadiusOverride", 400.0);
+		
+		DispatchSpawn(ExplosionIndex);
+		ActivateEntity(ExplosionIndex);
+		
+		TeleportEntity(ExplosionIndex, origin, NULL_VECTOR, NULL_VECTOR);
+		AcceptEntityInput(ExplosionIndex, "Explode");
+		
+		AcceptEntityInput(ExplosionIndex, "Kill");
+	}
 	
-	origin[2] -= 10.0;
+	origin[2] -= 20.0;
 	MakeRadiusPush(origin, lenght, (damage * 10.0));
 }
 stock MakeSmokeFollow(entity, Float:life, const color[4]) {
@@ -484,7 +516,7 @@ public ExplodeC4(index) {
 	EmitSoundFromOrigin(sound, vecOrigin);
 	
 	vecOrigin[2] -= 10.0;
-	ExplosionDamage(vecOrigin, 400.0, 600.0, GetEntPropEnt(index, Prop_Send, "m_hOwnerEntity"));
+	ExplosionDamage(vecOrigin, 800.0, 600.0, GetEntPropEnt(index, Prop_Send, "m_hOwnerEntity"));
 	
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 600, 600);
 	TE_SendToAll();
@@ -542,4 +574,99 @@ public ULTI_TraceDecal(Float:vecOrigin[3], decal) {
 	
 	TE_SetupBSPDecal(vecOrigin2, 0, decal);
 	TE_SendToAll();
+}
+stock bool:CTF_IsNear(client, target) {
+	new Float:vecStart[3], Float:vecEnd[3];
+	
+	if( GetClientAimTarget(client, false) != target )
+		return false;
+	
+	
+	if( IsValidClient(client) ) 
+		GetClientEyePosition(client, vecStart);
+	else 
+		GetEntPropVector(client, Prop_Send, "m_vecOrigin", vecStart);
+	
+	
+	if( IsValidClient(target) )
+		GetClientEyePosition(target, vecStart);
+	else
+		GetEntPropVector(target, Prop_Send, "m_vecOrigin", vecEnd);
+	
+	
+	if( GetVectorDistance(vecStart, vecEnd) >= 100.0 )
+		return false;
+	
+	
+	return true;
+}
+stock CTF_FillupAmmunition(client, entity, grenade = false) {
+	
+	SetVariantString("Open");
+	AcceptEntityInput(entity, "SetAnimation");
+	HookSingleEntityOutput(entity, "OnAnimationDone", CTF_FillupAmmunition2);
+	
+	if( !grenade ) {
+		
+		new health = GetClientHealth(client);
+		new gren1 = g_iPlayerGrenadeAmount[client][0];
+		new gren2 = g_iPlayerGrenadeAmount[client][1];
+		
+		CTF_CLASS_init(client);
+		
+		SetEntityHealth(client, health);
+		g_iPlayerGrenadeAmount[client][0] = gren1;
+		g_iPlayerGrenadeAmount[client][1] = gren2;		
+	}
+	else {
+		
+		switch( g_iPlayerClass[client] ) {
+			case class_scout: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 4;
+			}
+			case class_sniper: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 0;
+			}
+			case class_soldier: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 2;
+			}
+			case class_demoman: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 2;
+			}
+			case class_medic: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 4;
+			}
+			case class_hwguy: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 2;
+			}
+			case class_pyro: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 0;
+			}
+			case class_spy: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 4;
+			}
+			case class_engineer: {
+				g_iPlayerGrenadeAmount[client][0] = 4;
+				g_iPlayerGrenadeAmount[client][1] = 4;
+			}
+		}
+	}
+}
+public CTF_FillupAmmunition2(const String:output[], caller, activator, Float:delay) {
+	SetVariantString("Close");
+	AcceptEntityInput(caller, "SetAnimation");
+	
+	HookSingleEntityOutput(caller, "OnAnimationDone", CTF_FillupAmmunition3);
+}
+public CTF_FillupAmmunition3(const String:output[], caller, activator, Float:delay) {
+	SetVariantString("Idle");
+	AcceptEntityInput(caller, "SetAnimation");
 }
