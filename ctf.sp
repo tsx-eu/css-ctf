@@ -49,14 +49,16 @@ public OnPluginStart() {
 	RegConsoleCmd("ctf_backpack_id", 		CmdBackPack_id);
 	
 	g_hClassRestriction[1] 	= CreateConVar("ctf_cr_scout",		"-1", "Class restriction: scout");
-	g_hClassRestriction[2]	= CreateConVar("ctf_cr_sniper",		"-1", "Class restriction: sniper");
+	g_hClassRestriction[2]	= CreateConVar("ctf_cr_sniper",		"2", "Class restriction: sniper");
 	g_hClassRestriction[3]	= CreateConVar("ctf_cr_soldier",	"-1", "Class restriction: soldier");
 	g_hClassRestriction[4]	= CreateConVar("ctf_cr_demoman",	"2", "Class restriction: demoman");
 	g_hClassRestriction[5]	= CreateConVar("ctf_cr_medic",		"-1", "Class restriction: medic");
 	g_hClassRestriction[6]	= CreateConVar("ctf_cr_hwguy",		"2", "Class restriction: hwguy");
-	g_hClassRestriction[7]	= CreateConVar("ctf_cr_pryo",		"1", "Class restriction: pyro");
+	g_hClassRestriction[7]	= CreateConVar("ctf_cr_pyro",		"1", "Class restriction: pyro");
 	g_hClassRestriction[8]	= CreateConVar("ctf_cr_spy",		"2", "Class restriction: spy");
 	g_hClassRestriction[9]	= CreateConVar("ctf_cr_engineer",	"1", "Class restriction: engineer");
+	
+	g_hFriendlyFire = FindConVar("mp_friendlyfire");
 	
 	HookEvent("round_start", 	EventRoundStart, 	EventHookMode_Post);
 	HookEvent("player_spawn", 	EventSpawn, 		EventHookMode_Post);
@@ -79,6 +81,115 @@ public OnPluginStart() {
 	
 	AddNormalSoundHook(NormalSHook:sound_hook);
 } 
+public CTF_Reset_Player(i) {
+	g_iLastTeam[i] = 0;
+	g_iRevieveTime[i] = 0;
+	g_iPlayerArmor[i] = 0;
+	g_iPlayerClass[i] = class_none;
+	g_fLastDrop[i] = 0.0;
+	g_fUlti_Cooldown[i] = 0.0;
+	g_flPlayerSpeed[i] = 0.0;
+	
+	g_iPlayerGrenadeAmount[i][0] = 0;
+	g_iPlayerGrenadeAmount[i][1] = 0;
+	
+	g_flGasLastDamage[i] = 0.0;
+	
+	g_iCustomWeapon_Entity[i][0] = 0;
+	g_iCustomWeapon_Entity[i][1] = 0;
+	
+	g_iCustomWeapon_Entity2[i][0] = 0;
+	g_iCustomWeapon_Entity2[i][1] = 0;
+	g_iCustomWeapon_Entity2[i][2] = 0;
+	g_iCustomWeapon_Ammo[i][0] = 0;
+	g_iCustomWeapon_Ammo[i][1] = 0;
+	
+	g_fCustomWeapon_NextShoot[i][0] = 0.0;
+	g_fCustomWeapon_NextShoot[i][1] = 0.0;
+	g_fCustomWeapon_NextShoot[i][2] = 0.0;
+	
+	g_iContaminated[i] = 0;
+	g_fContaminate[i] = 0.0;
+	
+	g_iBurning[i] = 0;
+	g_fBurning[i] = 0.0;
+	
+	g_fDelay[i][0] = 0.0;
+	g_fDelay[i][1] = 0.0;
+	g_fRestoreSpeed[i][0] = 0.0;
+	g_fRestoreSpeed[i][1] = 0.0;
+	
+	g_flCrazyTime[i] = 0.0;
+	
+	g_iBuild[i][build_sentry] = 0;
+	g_iBuild[i][build_teleporter_in] = 0;
+	g_iBuild[i][build_teleporter_out] = 0;
+	
+	g_flMetal[i] = 0.0;
+}
+public CTF_Reset_Global() {
+	
+	for(new i=0; i<2048; i++) {
+		
+		g_flBagPack_Last[i] = 0.0;
+		
+		g_flPrimedTime[i] = 0.0;
+		g_iGrenadeType[i] = grenade_none;
+		g_flNailData[i][0] = 0.0;
+		g_flNailData[i][1] = 0.0;
+		
+		g_flCustomWeapon_Entity3[i] = 0.0;
+		g_bIsCustomWeapon[i] = false;
+		
+		
+		g_C4_fExplodeTime[i] = 0.0;
+		g_C4_fNextBeep[i] = 0.0;
+		g_C4_bIsActive[i] = false;
+		
+		g_flBuildHealth[i][build_sentry] = 0.0;
+		g_flBuildHealth[i][build_teleporter_in] = 0.0;
+		g_flBuildHealth[i][build_teleporter_out] = 0.0;
+		
+		g_flBuildThink[i][build_sentry] = 0.0;
+		g_flBuildThink[i][build_teleporter_in] = 0.0;
+		g_flBuildThink[i][build_teleporter_out] = 0.0;
+		
+		g_flBuildThink2[i][build_sentry] = 0.0;
+		g_flBuildThink2[i][build_teleporter_in] = 0.0;
+		g_flBuildThink2[i][build_teleporter_out] = 0.0;
+		
+		g_flSentryAngles[i][0] = 0.0;
+		g_flSentryAngles[i][1] = 0.0;
+		
+		g_iSentryAngles[i][0] = 0;
+		g_iSentryAngles[i][1] = 0;
+		
+		g_iSentryTarget[i] = 0;
+		g_iSentryLevel[i] = 0;
+		
+		g_flLastTouch[i] = 0.0;
+		g_vecLastTouch[i][0] = 0.0;
+		g_vecLastTouch[i][1] = 0.0;
+		g_vecLastTouch[i][2] = 0.0;
+	}
+	
+	for(new Flag_Type = 0; Flag_Type<=2; Flag_Type++) {
+		
+		g_iFlags_Entity[Flag_Type] = 0;
+		g_iFlags_Carrier[Flag_Type] = 0;
+		g_fFlags_Respawn[Flag_Type] = 0.0;
+		
+		g_iSecu_Status[Flag_Type] = 0;
+		g_bSecurity = false;
+	}
+	g_iScore[0] = 0;
+	g_iScore[1] = 0;
+	
+	for(new i=0; i<65; i++) {
+		
+		CTF_Reset_Player(i);		
+	}
+}
 public Action:CmdBackPack_add(client, args) {
 	
 	new String:mapname[64], Float:vecOrigin[3], Float:vecAngles[3];
@@ -180,6 +291,13 @@ public Action:sound_hook(clients[64], &numClients, String:sample[PLATFORM_MAX_PA
 }  
 public Action:SecuIsActivited(Handle:timer, any:zomg) {
 	g_iSecu_Status[zomg] = 0;
+	
+	if( zomg == _:flag_blue ) {
+		PrintToChatAll("[CTF] La securite blue a ete activee!");
+	}
+	else {
+		PrintToChatAll("[CTF] La securite rouge a ete activee!");
+	}
 }
 
 public SheduleEntityInput( entity, Float:time, const String:input[]) {
@@ -191,7 +309,7 @@ public SheduleEntityInput( entity, Float:time, const String:input[]) {
 	
 	new Handle:dp;
 	CreateDataTimer( time, ScheduleTargetInput_Task, dp); 
-	WritePackCell(dp, entity);
+	WritePackCell(dp, EntIndexToEntRef(entity));
 	WritePackString(dp, input);
 }
 public ScheduleTargetInput( const String:targetname[], Float:time, const String:input[]) {
@@ -209,7 +327,7 @@ public ScheduleTargetInput( const String:targetname[], Float:time, const String:
 		
 		new Handle:dp;
 		CreateDataTimer( time, ScheduleTargetInput_Task, dp); 
-		WritePackCell(dp, i);
+		WritePackCell(dp, EntIndexToEntRef(i));
 		WritePackString(dp, input);
 	}
 }
@@ -218,9 +336,11 @@ public Action:ScheduleTargetInput_Task(Handle:timer, Handle:dp) {
 	
 	ResetPack(dp);
 	
-	entity = ReadPackCell(dp);
+	entity = EntRefToEntIndex(ReadPackCell(dp));
 	ReadPackString(dp, input, 127);
 	
+	if( entity == INVALID_ENT_REFERENCE ) 
+		return Plugin_Handled;
 	if( entity <= 0 )
 		return Plugin_Handled;
 	if( !IsValidEdict(entity) )
@@ -258,33 +378,77 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 				}
 				StopSound(i, SNDCHAN_STATIC, "UI/hint.wav");
 				
-				if( g_iRevieveTime[i] <= 0 ) {
+				if( g_iRevieveTime[i] <= 0 && g_iPlayerClass[i] != class_none ) {
 					CS_RespawnPlayer(i);
+				}
+				
+				if( g_iPlayerClass[i] == class_none ) {
+					CTF_NONE_init(i);
+					
+					PrintHintText(i, "Veuillez selectionner une classe...");
+					StopSound(i, SNDCHAN_STATIC, "UI/hint.wav");
 				}
 			}
 		}
 		
+		new String:g_szClass[10][32] = { "Aucune -", "Eclaireur -", "Sniper -", "Soldat -", "Artificier -", "Infirmier -", "Mitrailleur -", "Pyroman -", "Espion -", "Technicien -" };
+		CS_SetClientClanTag(i, g_szClass[g_iPlayerClass[i]]);
+		
 		CTF_TP_Links(i);
 		
-		new String:szHUD[128];
+		new String:szHUD[256];
 		Format(szHUD, sizeof(szHUD), "Scores:\n");
 		
 		if( g_iScore[flag_red] > g_iScore[flag_blue] || (g_iScore[flag_red] == g_iScore[flag_blue] && GetClientTeam(i) == CS_TEAM_T ) ) {
-			Format(szHUD, sizeof(szHUD), "%s Equipe Rouge: %i\n Equipe Bleue: %i\n\n", szHUD, g_iScore[flag_red], g_iScore[flag_blue]);
-			
+			Format(szHUD, sizeof(szHUD), "%s - Equipe Rouge: %i\n - Equipe Bleue: %i\n\n", szHUD, g_iScore[flag_red], g_iScore[flag_blue]);
 		}
 		else if( g_iScore[flag_red] < g_iScore[flag_blue] || (g_iScore[flag_red] == g_iScore[flag_blue] && GetClientTeam(i) == CS_TEAM_CT ) ) {
-			Format(szHUD, sizeof(szHUD), "%s Equipe Bleue: %i\n Equipe Rouge: %i\n\n", szHUD, g_iScore[flag_blue], g_iScore[flag_red]);
+			Format(szHUD, sizeof(szHUD), "%s - Equipe Bleue: %i\n - Equipe Rouge: %i\n\n", szHUD, g_iScore[flag_blue], g_iScore[flag_red]);
 		}
 		else {
-			Format(szHUD, sizeof(szHUD), "%s Equipe Rouge: %i\n Equipe Bleue: %i\n\n", szHUD, g_iScore[flag_red], g_iScore[flag_blue]);
+			Format(szHUD, sizeof(szHUD), "%s - Equipe Rouge: %i\n - Equipe Bleue: %i\n\n", szHUD, g_iScore[flag_red], g_iScore[flag_blue]);
 		}
 		
-		
+		if( g_bSecurity ) {
+			
+			Format(szHUD, sizeof(szHUD), "%s Securite:", szHUD);
+			
+			if( GetClientTeam(i) == CS_TEAM_CT ) {
+				
+				if( g_iSecu_Status[flag_blue] )
+					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Desactivee", szHUD);
+				else
+					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Activee", szHUD);
+				
+				if( g_iSecu_Status[flag_red] )
+					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Desactivee", szHUD);
+				else
+					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Activee", szHUD);
+				
+			}
+			else {
+				
+				if( g_iSecu_Status[flag_red] )
+					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Desactivee", szHUD);
+				else
+					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Activee", szHUD);
+				
+				if( g_iSecu_Status[flag_blue] )
+					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Desactivee", szHUD);
+				else
+					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Activee", szHUD);
+					
+			}
+			
+			Format(szHUD, sizeof(szHUD), "%s\n\n", szHUD);
+			
+		}
 		SetEntData(i, g_iOffset_armor, g_iPlayerArmor[i], 4, true);
 		
 		new String:money_nade[12];
 		Format(money_nade, sizeof(money_nade), "%i%i", g_iPlayerGrenadeAmount[i][0], g_iPlayerGrenadeAmount[i][1]);
+		
+		Format(szHUD, sizeof(szHUD), "%sGrenade: %i - %i", szHUD, g_iPlayerGrenadeAmount[i][0], g_iPlayerGrenadeAmount[i][1]);
 		
 		if( g_iPlayerClass[i] == class_engineer ) {
 			Format(money_nade, sizeof(money_nade), "%i%s", RoundFloat(g_flMetal[i]), money_nade);
@@ -293,17 +457,28 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 			if( g_flMetal[i] > 200.0 ) {
 				g_flMetal[i] = 200.0;
 			}
-			Format(szHUD, sizeof(szHUD), "%s\nMetal: %i", szHUD, RoundFloat(g_flMetal[i]));
+			Format(szHUD, sizeof(szHUD), "%s\nMetal: %i \n\nConstruction:", szHUD, RoundFloat(g_flMetal[i]));
 			
 			if( IsValidSentry( g_iBuild[i][build_sentry]) && g_flBuildHealth[ g_iBuild[i][build_sentry] ][build_sentry] > 0.0 ) {
-				Format(szHUD, sizeof(szHUD), "%s - Tourelle: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_sentry] ][build_sentry] );
+				Format(szHUD, sizeof(szHUD), "%s\n  - Tourelle: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_sentry] ][build_sentry] );
 			}
 			else {
-				Format(szHUD, sizeof(szHUD), "%s - Tourelle: H/S", szHUD);
+				Format(szHUD, sizeof(szHUD), "%s\n  - Tourelle: H/S", szHUD);
+			}
+			
+			if( IsValidTeleporter( g_iBuild[i][build_teleporter_in]) && g_flBuildHealth[ g_iBuild[i][build_teleporter_in] ][build_teleporter_in] > 0.0 ) {
+				Format(szHUD, sizeof(szHUD), "%s\n  - Teleporteur E.: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_teleporter_in] ][build_teleporter_in] );
+			}
+			else {
+				Format(szHUD, sizeof(szHUD), "%s\n  - Teleporteur E.: H/S", szHUD);
+			}
+			if( IsValidTeleporter( g_iBuild[i][build_teleporter_out]) && g_flBuildHealth[ g_iBuild[i][build_teleporter_out] ][build_teleporter_out] > 0.0 ) {
+				Format(szHUD, sizeof(szHUD), "%s\n  - Teleporteur S.: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_teleporter_out] ][build_teleporter_out] );
+			}
+			else {
+				Format(szHUD, sizeof(szHUD), "%s\n  - Teleporteur S.: H/S", szHUD);
 			}
 		}
-		
-		Format(szHUD, sizeof(szHUD), "%s\nGrenade: %i - %i", szHUD, g_iPlayerGrenadeAmount[i][0], g_iPlayerGrenadeAmount[i][1]);
 		
 		new Handle:hBuffer = StartMessageOne("KeyHintText", i);
 		BfWriteByte(hBuffer, 1);
@@ -482,6 +657,13 @@ public Action:Cmd_Say(client, args) {
 	}
 	if(	strcmp(szSayTrig, "!ultimate", false) == 0		|| strcmp(szSayTrig, "/ultimate", false) == 0
 	) {
+		return Plugin_Handled;
+	}
+	if(	strcmp(szSayTrig, "!help", false) == 0		|| strcmp(szSayTrig, "/help", false) == 0	||
+	strcmp(szSayTrig, "!aide", false) == 0	|| strcmp(szSayTrig, "/aide", false) == 0	||
+	strcmp(szSayTrig, "!aides", false) == 0	|| strcmp(szSayTrig, "/aides", false) == 0	
+	) {
+		ShowMOTDPanel(client, "Capture The Flag: Besoin d'aide?", "http://www.ts-x.eu/forum/viewtopic.php?p=116711#p116711", MOTDPANEL_TYPE_URL);
 		return Plugin_Handled;
 	}
 	

@@ -276,6 +276,12 @@ public CTF_WEAPON_RPG_FireRocket(client) {
 }
 public CTF_WEAPON_RPG_FireRocket_TOUCH(rocket, entity) {
 	
+	new String:classname[64];
+	GetEdictClassname(entity, classname, sizeof(classname));
+	
+	if( StrContains(classname, "trigger_", false) == 0) 
+		return;
+	
 	new Float:vecOrigin[3];
 	
 	GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", vecOrigin);
@@ -302,6 +308,11 @@ public CTF_WEAPON_RPG_FireRocket_TOUCH(rocket, entity) {
 	vecOrigin[2] = 0.0;
 	
 	TeleportEntity(rocket, NULL_VECTOR, NULL_VECTOR, vecOrigin);
+	
+	SetEntProp(rocket, Prop_Data, "m_nSolidType", 0);
+	SetEntProp(rocket, Prop_Data, "m_MoveCollide", 0);
+	SetEntProp(rocket, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_DEBRIS);
+	DispatchKeyValue(rocket, "solid", "0");
 	
 	SDKUnhook(rocket, SDKHook_Touch, CTF_WEAPON_RPG_FireRocket_TOUCH);	
 	SheduleEntityInput(rocket, 3.0, "KillHierarchy");
@@ -420,6 +431,7 @@ public CTF_WEAPON_PIPE_PipeBomb(client) {
 		DispatchKeyValue(ent, "Skin", "1");
 	}
 	
+	DispatchKeyValue(ent, "model", "models/weapons/w_models/w_grenade_grenadelauncher.mdl");
 	ActivateEntity(ent);
 	DispatchSpawn(ent);
 	
@@ -427,7 +439,7 @@ public CTF_WEAPON_PIPE_PipeBomb(client) {
 	SetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity", client);
 	SetEntPropFloat(ent, Prop_Send, "m_flElasticity", 0.4);
 	SetEntityMoveType(ent, MOVETYPE_FLYGRAVITY);
-	SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PROJECTILE);
+	//SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_NPC);
 	
 	vecAngles[0]-=10.0;
 	
@@ -449,6 +461,19 @@ public CTF_WEAPON_PIPE_PipeBomb(client) {
 public CTF_WEAPON_PIPE_PipeBomb_TOUCH(rocket, entity) {
 	
 	if( !IsValidClient(entity) ) {
+		
+		new Float:here[3];
+		GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", here);
+		
+		if( GetVectorDistance(g_vecLastTouch[rocket], here) <= 0.0001 && g_flLastTouch[rocket] <= GetGameTime()+0.25 ) {
+			
+			
+			TeleportEntity(rocket, NULL_VECTOR, NULL_VECTOR, here);
+			SetEntityMoveType(rocket, MOVETYPE_NONE);
+		}
+		g_flLastTouch[rocket] = GetGameTime();
+		GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", g_vecLastTouch[rocket]);
+		
 		return;
 	}
 	
@@ -506,6 +531,11 @@ stock CTF_WEAPON_PIPE_PipeBomb_EXPL(rocket, all=false) {
 	SetEntityMoveType(rocket, MOVETYPE_FLY);
 	SetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity", 0);
 	TeleportEntity(rocket, NULL_VECTOR, NULL_VECTOR, vecOrigin);
+	
+	SetEntProp(rocket, Prop_Data, "m_nSolidType", 0);
+	SetEntProp(rocket, Prop_Data, "m_MoveCollide", 0);
+	SetEntProp(rocket, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_DEBRIS);
+	DispatchKeyValue(rocket, "solid", "0");
 	
 	SDKUnhook(rocket, SDKHook_Touch, CTF_WEAPON_PIPE_PipeBomb_TOUCH);	
 	SheduleEntityInput(rocket, 3.0, "KillHierarchy");
@@ -795,11 +825,13 @@ public CTF_WEAPON_FLAME_Fire(client, shutdown) {
 }
 public CTF_WEAPON_FLAME_TOUCH(rocket, entity) {
 	
-	if( !IsValidClient(entity) ) {
+	if( !IsValidClient(entity) || !IsValidEdict(rocket) ) {
 		return;
 	}
 	
 	IgniteEntity(entity, 5.0);
 	DealDamage(entity, GetRandomInt(8, 12), GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"), DMG_BURN);
-	RemoveEdict(rocket);
+	
+	AcceptEntityInput(rocket, "Kill");
+	SDKUnhook(entity, SDKHook_Touch, CTF_WEAPON_FLAME_TOUCH);
 }

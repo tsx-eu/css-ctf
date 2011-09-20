@@ -321,9 +321,11 @@ public CTF_FixAngles() {
 		}
 	}
 }
-stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index) {
+stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index, Float:cumul = 1.0) {
 	
-	new Float:vecStart[3], Float:PlayerVec[3], Float:distance, Float:falloff = (damage/lenght), entity_to_ignore = -1;
+	new Float:PlayerVec[3], Float:distance, Float:falloff = (damage/lenght), Float:center2[3];
+	
+	origin[2] += 10.0;
 	
 	for(new i=1; i<=GetMaxEntities(); i++) {
 		if( !IsValidEdict(i) )
@@ -332,39 +334,47 @@ stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index) {
 			continue;
 		if( !IsMoveAble(i) && !IsValidSentry(i) && !IsValidTeleporter(i) )
 			continue;
+		if( !IsValidClient(i) )
+			continue;
 		
-		GetEntPropVector(i, Prop_Send, "m_vecOrigin", PlayerVec);
+		if( IsValidClient(i) ) {
+			GetClientEyePosition(i, PlayerVec);
+		}
+		else {
+			GetEntPropVector(i, Prop_Send, "m_vecOrigin", PlayerVec);
+		}
 		
-		vecStart[0] = origin[0];
-		vecStart[1] = origin[1];
-		vecStart[2] = origin[2];
 		
 		distance = GetVectorDistance(origin, PlayerVec) * falloff;
 		
 		new Float:dmg = (damage - distance);		
 		
-		new Handle:trace = TR_TraceRayFilterEx(vecStart, PlayerVec, MASK_SHOT, RayType_EndPoint, FilterToOne, entity_to_ignore);
-		if( !TR_DidHit(trace) ) {
-			
-			break;
-		}
-		new Float:fraction = (TR_GetFraction(trace) * 1.25);
+		TR_TraceRayFilter(origin, PlayerVec, MASK_SHOT, RayType_EndPoint, TraceEntityFilterStuff2);
+		new Float:fraction = (TR_GetFraction()) * 1.5;
 		
-		if( fraction >= 1.0 )
+		if( fraction > 1.0 )
 			fraction = 1.0;
+		if( fraction < 0.0 )
+			fraction = 0.0;
 		
-		CloseHandle(trace);
+		TR_GetEndPosition(center2);
+		
+		dmg *= fraction;
 		
 		if( dmg < 0.0 )
 			continue;
 		
 		if( IsValidClient(i) ) {
-			if( i == index || GetClientTeam(i) == GetClientTeam(index) )
-				dmg *= 0.25;
+			if( i == index || GetClientTeam(i) == GetClientTeam(index) ) {
+				dmg *= 0.65;
+			}
 		}
+		
 		
 		DealDamage(i, RoundFloat(dmg), index);
 	}
+	
+	origin[2] -= 5.0;
 	
 	new ExplosionIndex = CreateEntityByName("env_explosion");
 	if (ExplosionIndex != -1) {
@@ -382,8 +392,83 @@ stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index) {
 		AcceptEntityInput(ExplosionIndex, "Kill");
 	}
 	
-	origin[2] -= 20.0;
-	MakeRadiusPush(origin, lenght, (damage * 10.0));
+	origin[2] += 5.0;
+	
+	MakeRadiusPush2(origin, lenght, (damage * 10.0 * cumul));
+	
+	origin[2] -= 10.0;
+}
+public bool:TraceEntityFilterStuff2(entity, mask) {
+
+	if( IsValidClient(entity) || IsMoveAble(entity) )
+		return false;
+	
+	if( entity > 0 && IsValidEdict(entity) && IsValidEntity(entity) ) {
+		new String:classname[64];
+		GetEdictClassname(entity, classname, sizeof(classname));
+		if( StrContains(classname, "ctf_") == 0 ) {
+			return false;
+		}
+	}
+	
+	return true;
+}
+stock MakeRadiusPush2( Float:center[3], Float:lenght, Float:damage) {
+	
+	new Float:vecPushDir[3], Float:vecOrigin[3], Float:vecVelo[3], Float:FallOff = (damage/lenght);
+	
+	for(new i=1; i<=2048; i++) {
+		if( !IsValidEdict(i) )
+			continue;
+		if( !IsValidEntity(i) )
+			continue;
+		if( !IsMoveAble(i) )
+			continue;
+		
+		if( IsValidClient(i) ) {
+			GetClientEyePosition(i, vecOrigin);
+		}
+		else {
+			GetEntPropVector(i, Prop_Send, "m_vecOrigin", vecOrigin);
+		}
+		
+		if( GetVectorDistance(vecOrigin, center) > lenght )
+			continue;
+		
+		GetEntPropVector(i, Prop_Data, "m_vecVelocity", vecVelo);
+		
+		vecPushDir[0] = vecOrigin[0] - center[0];
+		vecPushDir[1] = vecOrigin[1] - center[1];
+		vecPushDir[2] = vecOrigin[2] - center[2];
+		
+		NormalizeVector(vecPushDir, vecPushDir);
+		new Float:dist = (lenght - GetVectorDistance(vecOrigin, center)) * FallOff;
+		
+		TR_TraceRayFilter(center, vecOrigin, MASK_SHOT, RayType_EndPoint, TraceEntityFilterStuff2);
+		new Float:fraction = (TR_GetFraction()) * 1.5;
+		
+		if( fraction >= 1.0 )
+			fraction = 1.0;
+		
+		dist *= fraction;
+		
+		new Float:vecPush[3];
+		vecPush[0] = (dist * vecPushDir[0]) + vecVelo[0];
+		vecPush[1] = (dist * vecPushDir[1]) + vecVelo[1];
+		vecPush[2] = (dist * vecPushDir[2]) + vecVelo[2];
+		
+		new flags = GetEntityFlags(i);
+		if( vecPush[2] > 0.0 && (flags & FL_ONGROUND) ) {
+			
+			SetEntProp(i, Prop_Data, "m_fFlags", flags&~FL_ONGROUND);
+			SetEntPropEnt(i, Prop_Send, "m_hGroundEntity", -1);
+			
+			//vecOrigin[2] += 0.01;
+			//TeleportEntity(i, vecOrigin, NULL_VECTOR, NULL_VECTOR);
+		}
+		TeleportEntity(i, NULL_VECTOR, NULL_VECTOR, vecPush);
+	}
+	
 }
 stock MakeSmokeFollow(entity, Float:life, const color[4]) {
 	

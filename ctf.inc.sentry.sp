@@ -15,7 +15,7 @@
 public CTF_ENGINEER_DETALL(client) {
 	if( IsValidSentry(g_iBuild[client][build_sentry]) ) {
 		
-		g_flBuildHealth[client][ build_sentry ] = 0.0;
+		g_flBuildHealth[ g_iBuild[client][build_sentry] ][ build_sentry ] = 0.0;
 		
 		new Float:vecStart[3];
 		GetEntPropVector(g_iBuild[client][build_sentry], Prop_Send, "m_vecOrigin", vecStart);
@@ -26,7 +26,7 @@ public CTF_ENGINEER_DETALL(client) {
 	
 	if( IsValidTeleporter(g_iBuild[client][build_teleporter_in]) ) {
 		
-		g_flBuildHealth[client][build_teleporter_in] = 0.0;
+		g_flBuildHealth[ g_iBuild[client][build_teleporter_in] ][build_teleporter_in] = 0.0;
 		
 		new Float:vecStart[3];
 		GetEntPropVector(g_iBuild[client][build_teleporter_in], Prop_Send, "m_vecOrigin", vecStart);
@@ -37,12 +37,12 @@ public CTF_ENGINEER_DETALL(client) {
 	
 	if( IsValidTeleporter(g_iBuild[client][build_teleporter_out]) ) {
 		
-		g_flBuildHealth[client][build_teleporter_out] = 0.0;
+		g_flBuildHealth[ g_iBuild[client][build_teleporter_out] ][build_teleporter_out] = 0.0;
 		
 		new Float:vecStart[3];
 		GetEntPropVector(g_iBuild[client][build_teleporter_out], Prop_Send, "m_vecOrigin", vecStart);
 		
-		ExplosionDamage(vecStart, 200.0, 200.0, client);
+		ExplosionDamage(vecStart, 200.0, 200.0, client );
 		DealDamage(g_iBuild[client][build_teleporter_out], 10000, client);
 	}
 }
@@ -101,7 +101,6 @@ public CTF_SG_Build(client) {
 	}
 	
 	g_flMetal[client] -= 150.0;
-	PrintToChat(client, "[CTF] Construction en cours...");
 	
 	new ent = CreateEntityByName("cycler");
 	
@@ -114,15 +113,10 @@ public CTF_SG_Build(client) {
 	}
 	
 	DispatchSpawn(ent);
-	//ActivateEntity(ent);
 	
 	SetEntityModel(ent, "models/buildables/sentry1.mdl");
 	
 	SetEntProp(ent, Prop_Data, "m_nSolidType", 2);
-	
-	//new Float:vecMins[3] = {-20.0, -10.0, 0.0}, Float:vecMaxs[3] = {20.0, 10.0, 60.0};
-	//SetEntPropVector( ent, Prop_Send, "m_vecMins", vecMins);
-	//SetEntPropVector( ent, Prop_Send, "m_vecMaxs", vecMaxs);
 	
 	SetEntProp( ent, Prop_Data, "m_takedamage", 1);
 	SetEntProp( ent, Prop_Data, "m_iHealth", 1);
@@ -134,6 +128,39 @@ public CTF_SG_Build(client) {
 	
 	vecOrigin[0] = (vecOrigin[0] + (45.0 * Cosine( degrees_to_radians(vecAngles[1]) ) ) );
 	vecOrigin[1] = (vecOrigin[1] + (45.0 * Sine(  degrees_to_radians(vecAngles[1]) ) ) );
+	
+	new Float:vecMins[3], Float:vecMaxs[3];
+	Entity_GetMinSize(ent, vecMins);
+	Entity_GetMaxSize(ent, vecMaxs);
+	
+	vecOrigin[2] += 1.0;
+	
+	vecMins[2] += 5.0;
+	
+	new Handle:trace = TR_TraceHullEx(vecOrigin, vecOrigin, vecMins, vecMaxs, MASK_SHOT);
+	if( TR_DidHit(trace) ) {
+		
+		new Float:vecBlock[3], Float:vecOrigin2[3];
+		
+		GetClientAbsOrigin(client, vecOrigin2);
+		TR_GetEndPosition(vecBlock, trace);
+		
+		vecBlock[2] += 10.0;
+		
+		TE_SetupBeamPoints(vecBlock, vecOrigin2, g_cPhysicBeam, 0, 0, 0, 3.0, 10.0, 10.0, 0, 0.0, {255, 0, 0, 250}, 0);
+		TE_SendToClient(client);
+		
+		g_flMetal[client] += 150.0;
+		PrintToChat(client, "[CTF] Impossible de construire ici.");
+		AcceptEntityInput(ent, "Kill");
+		
+		CloseHandle(trace);
+		return;
+	}
+	CloseHandle(trace);
+	vecOrigin[2] -= 1.0;
+	
+	PrintToChat(client, "[CTF] Construction en cours...");
 	
 	if( GetClientTeam(client) == CS_TEAM_CT ) {
 		Colorize(ent, 0, 0, 255, 0);
@@ -172,12 +199,13 @@ public Action:CTF_SG_BuildPost(Handle:timer, any:client) {
 		SheduleEntityInput(ent, 0.5, "Kill");
 		
 		PrintToChat(client, "[CTF] La construction a ete interompue.");
+		CTF_ENGINEER_ulti(client);
 		return;
 	}
 	g_iSentryLevel[ g_iBuild[client][build_sentry] ] = 1;
 	
 	g_flPlayerSpeed[client] = 300.0;
-	
+	CTF_ENGINEER_ulti(client);
 	PrintToChat(client, "[CTF] Votre tourelle a ete construite!");
 }
 public CTF_SG_FindTarget(client, ent) {
@@ -440,7 +468,6 @@ public CTF_TP_Build(client, build_teleporter) {
 	}
 	
 	g_flMetal[client] -= 120.0;
-	PrintToChat(client, "[CTF] Construction en cours...");
 	
 	new ent = CreateEntityByName("cycler");
 	new Float:vecMins[3] = {-8.0, -32.0, 0.0};
@@ -477,6 +504,34 @@ public CTF_TP_Build(client, build_teleporter) {
 	
 	vecOrigin[0] = (vecOrigin[0] + (45.0 * Cosine( degrees_to_radians(vecAngles[1]) ) ) );
 	vecOrigin[1] = (vecOrigin[1] + (45.0 * Sine(  degrees_to_radians(vecAngles[1]) ) ) );
+	
+	vecOrigin[2] += 1.0;
+	vecMins[2] += 5.0;
+	
+	new Handle:trace = TR_TraceHullEx(vecOrigin, vecOrigin, vecMins, vecMaxs, MASK_SHOT);
+	if( TR_DidHit(trace) ) {
+		
+		new Float:vecBlock[3], Float:vecOrigin2[3];
+		
+		GetClientAbsOrigin(client, vecOrigin2);
+		TR_GetEndPosition(vecBlock, trace);
+		
+		vecBlock[2] += 10.0;
+		
+		TE_SetupBeamPoints(vecBlock, vecOrigin2, g_cPhysicBeam, 0, 0, 0, 3.0, 10.0, 10.0, 0, 0.0, {255, 0, 0, 250}, 0);
+		TE_SendToClient(client);
+		
+		g_flMetal[client] += 120.0;
+		PrintToChat(client, "[CTF] Impossible de construire ici.");
+		AcceptEntityInput(ent, "Kill");
+		
+		CloseHandle(trace);
+		return;
+	}
+	
+	CloseHandle(trace);
+	vecOrigin[2] -= 1.0;
+	vecMins[2] -= 5.0;
 	
 	Colorize(ent, 0, 0, 0, 255);
 	
@@ -529,10 +584,12 @@ public Action:CTF_TP_BuildPost(Handle:timer, any:client) {
 		SheduleEntityInput(ent, 0.5, "Kill");
 		
 		PrintToChat(client, "[CTF] La construction a ete interompue.");
+		CTF_ENGINEER_ulti(client);
 		return;
 	}
 	g_flPlayerSpeed[client] = 300.0;
 	
+	CTF_ENGINEER_ulti(client);
 	PrintToChat(client, "[CTF] Votre teleporteur a ete construit!");
 }
 public Action:CTF_TP_BuildPost2(Handle:timer, any:client) {
@@ -546,10 +603,11 @@ public Action:CTF_TP_BuildPost2(Handle:timer, any:client) {
 		SheduleEntityInput(ent, 0.5, "Kill");
 		
 		PrintToChat(client, "[CTF] La construction a ete interompue.");
+		CTF_ENGINEER_ulti(client);
 		return;
 	}
 	g_flPlayerSpeed[client] = 300.0;
-	
+	CTF_ENGINEER_ulti(client);
 	PrintToChat(client, "[CTF] Votre teleporteur a ete construit!");
 }
 public CTF_TP_Links(client) {

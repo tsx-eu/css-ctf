@@ -89,7 +89,9 @@ enum enum_backpack_data {
 	bagpack_max
 }
 
+new Handle:g_hFriendlyFire;
 new Handle:g_hClassRestriction[class_max];
+
 new g_BagPack_Data[MAX_BAGPACK][bagpack_max];
 new Float:g_flBagPack_Last[2048];
 // ------------------------------
@@ -164,6 +166,10 @@ new g_cScorch;
 new Float:g_C4_fExplodeTime[2048];
 new Float:g_C4_fNextBeep[2048];
 new bool:g_C4_bIsActive[2048];
+
+new Float:g_flLastTouch[2048];
+new Float:g_vecLastTouch[2048][3];
+
 // ------------------------------
 // Class: Medic
 //

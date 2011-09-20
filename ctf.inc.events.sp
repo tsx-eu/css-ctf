@@ -17,6 +17,10 @@
 //
 public OnClientPutInServer(client) {
 	SDKHook(client, SDKHook_OnTakeDamage,	OnTakeDamage);
+	SDKHook(client, SDKHook_SetTransmit,	OnSetTransmit);
+	SDKHook(client, SDKHook_Touch, 			CTF_CLIENT_TOUCH);
+	
+	CTF_Reset_Player(client);
 	
 	g_iPlayerClass[client] = class_none;
 	g_iPlayerArmor[client] = 0;
@@ -40,7 +44,20 @@ public OnClientPutInServer(client) {
 	if( IsFakeClient(client) )
 		g_iPlayerClass[client] = enum_class_type:GetRandomInt(1, 9);
 	
-	SDKHook(client, SDKHook_Touch, CTF_CLIENT_TOUCH);
+	
+}
+public Action:OnSetTransmit(entity, client) {
+	if( entity == client )
+		return Plugin_Continue;
+	
+	if( IsValidClient(entity) ) {
+		if( g_iPlayerClass[entity] == class_spy ) {
+			if( g_fUlti_Cooldown[entity] > (GetGameTime()+(50.0)) ) {
+				return Plugin_Handled;
+			}
+		}
+	}
+	return Plugin_Continue;
 }
 public Action:CTF_CLIENT_TOUCH(client, target) {
 	if( !IsValidClient(client) )
@@ -121,10 +138,10 @@ public Action:EventPlayerTeam(Handle:Event, const String:name[], bool:dontBroadc
 	
 	g_iPlayerClass[client] = class_none;
 	if( team == CS_TEAM_CT ) {
-		PrintToChatAll("[CTF] %N a rejoin l'equipe bleue.", client);
+		PrintToChatAll("[CTF] %N a rejoint l'equipe bleue.", client);
 	}
 	else if( team == CS_TEAM_T ) {
-		PrintToChatAll("[CTF] %N a rejoin l'equipe rouge.", client);
+		PrintToChatAll("[CTF] %N a rejoint l'equipe rouge.", client);
 	}
 	return Plugin_Continue;
 }
@@ -174,7 +191,7 @@ public Action:EventSpawn(Handle:Event, const String:Name[], bool:Broadcast) {
 public Action:EventDeath(Handle:Event, const String:Name[], bool:Broadcast) {
 	new client = GetClientOfUserId(GetEventInt(Event, "userid"));
 	
-	g_iRevieveTime[client] = (GetClientCount()*2);
+	g_iRevieveTime[client] = (GetClientCount());
 	if( g_iRevieveTime[client] < 5 )
 		g_iRevieveTime[client] = 5;
 	if( g_iRevieveTime[client] > 20 )
@@ -270,7 +287,7 @@ public EventBulletImpact(Handle:event,const String:name[],bool:dontBroadcast) {
 //
 public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype) {
 	
-	//PrintToChat(victim, "Attacker: %i - inflictor: %i", attacker, inflictor);
+	//PrintToChat(victim, "Attacker: %i - inflictor: %i (%i)", attacker, inflictor, (attacker-GetMaxClients()));
 	
 	new String:classname[128], String:targetname[128];
 	GetEdictClassname(inflictor, classname, 127);
@@ -353,7 +370,7 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 	}
 	new bool:changed = false;
 	
-	if( attacker == 0 && inflictor == 0 ) {
+	if( attacker == 0 && inflictor == 0 && damagetype == DMG_FALL) {
 		damage *= 0.25;
 		damage -= 10.0;
 		changed = true;
@@ -362,10 +379,29 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 	if( IsValidClient(attacker) ) {
 		switch( g_iPlayerClass[attacker] ) {
 			case class_scout: {
-				damage *= 0.20;
+				damage *= 0.15;
 			}
 			case class_sniper: {
-				damage *= 2.0; 
+				if( inflictor == attacker ) {
+					new WeaponIndex = GetEntPropEnt(attacker, Prop_Send, "m_hActiveWeapon");
+					GetEdictClassname(WeaponIndex, classname, 127);
+					
+					if( StrEqual(classname, "weapon_awp") ) {
+						damage *= 1.8;
+						
+						new Float:vecStart[3], Float:vecEnd[3], Float:vecPush[3];
+						
+						GetClientEyePosition(attacker, vecStart);
+						GetClientEyePosition(victim, vecEnd);
+						
+						SubtractVectors(vecStart, vecEnd, vecPush);
+						NormalizeVector(vecPush, vecPush);
+						
+						ScaleVector(vecPush, -750.0);
+						TeleportEntity(victim, NULL_VECTOR, NULL_VECTOR, vecPush);
+					}
+				}
+				damage *= 1.0;
 			}
 			case class_soldier: {
 				damage *= 1.0;
@@ -390,18 +426,21 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 					
 					if( StrEqual(classname, "weapon_knife") ) {
 						
-						if( !ClientViews_LeftRight(victim, attacker, 1000.0, 0.8) ) {
+						if( damage > 150.0 ) {
 							damage *= 10.0;
+						}
+						else {
+							damage *= 4.0;
 						}
 					}
 					else if( StrEqual(classname, "weapon_usp") ) {
 						damage *= 0.0;
 						
-						g_fRestoreSpeed[victim][0] = (GetGameTime() + 2.0);
+						g_fRestoreSpeed[victim][0] = (GetGameTime() + 2.5);
 						if( g_fRestoreSpeed[victim][1] < 0.01 ) {
 							g_fRestoreSpeed[victim][1] = g_flPlayerSpeed[victim];
 						}
-						g_flPlayerSpeed[victim] = 100.0;
+						g_flPlayerSpeed[victim] = 150.0;
 					}
 				}
 			}
@@ -430,6 +469,15 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 			}
 		}
 		if( IsValidClient(victim) ) {
+			
+			if( attacker != victim && GetClientTeam(attacker) && GetClientTeam(victim) ) {
+				damage *= 0.5;
+				if( GetConVarInt(g_hFriendlyFire) == 0 ) {
+					damage *= 0.0;
+				}
+				changed = true;
+			}
+			
 			if( g_iPlayerArmor[victim] >= 1 ) {
 				
 				
@@ -627,6 +675,8 @@ public OnGameFrame() {
 						ScheduleTargetInput("ctf_security_red_sound", 40.0, "PlaySound");
 						
 						CreateTimer( ((40.0) + (0.01)), SecuIsActivited, Flag_Type);
+						
+						PrintToChatAll("[CTF] La securite rouge a ete desactivee!");
 						break;
 					}
 					if( Flag_Type == _:flag_blue && GetClientTeam(client) == CS_TEAM_T ) {
@@ -650,6 +700,8 @@ public OnGameFrame() {
 						ScheduleTargetInput("ctf_security_blue_sound", 40.0, "PlaySound");
 						
 						CreateTimer( ((40.0) + (0.01)), SecuIsActivited, Flag_Type);
+						
+						PrintToChatAll("[CTF] La securite blue a ete desactivee!");
 						break;
 					}
 				}
@@ -757,26 +809,26 @@ public OnGameFrame() {
 				new Float:fLastAttack = (GetEntPropFloat(WeaponIndex, Prop_Send, "m_flNextPrimaryAttack")-GetGameTime()) * 800.0;
 				if( fLastAttack < 1.0 )
 					fLastAttack = 1.0;
-				if( fLastAttack > 250.0 )
-					fLastAttack = 250.0;
+				if( fLastAttack > 150.0 )
+					fLastAttack = 150.0;
 				
 				if( fLastAttack > 50.0 ) {
 					g_fDelay[client][1] = GetGameTime() + ((fLastAttack/50.0)*1.5);
 				}
 				
-				new Float:fDelay2 = (g_fDelay[client][1]-GetGameTime())*255.0;
+				new Float:fDelay2 = (g_fDelay[client][1]-GetGameTime())*150.0;
 				if( fDelay2 < 1.0 )
 					fDelay2 = 1.0;
-				if( fDelay2 > 250.0 )
-					fDelay2 = 250.0;
+				if( fDelay2 > 150.0 )
+					fDelay2 = 150.0;
 				
-				new alpha = 100 + RoundToCeil( (fSpeed/250.0) * fDelay * fDelay2 * 100.0 );
+				new alpha = 100 + RoundToCeil( (fSpeed/250.0) * fDelay * fDelay2 * 150.0 );
 				
-				if( alpha > 240 )
-					alpha = 240;
+				if( alpha > 200 )
+					alpha = 200;
 				
-				if( alpha < 50 )
-					alpha = 50;
+				if( alpha < 10 )
+					alpha = 10;
 				
 				if( g_fUlti_Cooldown[client] > (GetGameTime()+(50.0)) ) {
 					Colorize(client, 255, 255, 255, 0);
@@ -905,10 +957,10 @@ public OnGameFrame() {
 			if( !IsValidEdict( g_BagPack_Data[i][bagpack_ent] ) )
 				continue;
 			if( !IsValidEntity( g_BagPack_Data[i][bagpack_ent] ) )
-				continue;
-			
-			
+				continue;			
 			if( g_flBagPack_Last[i] >= GetGameTime() )
+				continue;
+			if( g_BagPack_Data[i][bagpack_team] != GetClientTeam(client) )
 				continue;
 			
 			GetEntPropVector(g_BagPack_Data[i][bagpack_ent], Prop_Send, "m_vecOrigin", vecOrigin2);
@@ -956,6 +1008,8 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 //		Hooks - Map Call
 //
 public OnMapStart() {
+	
+	CTF_Reset_Global();
 	
 	g_hBDD = SQL_Connect("default", true, g_szError, sizeof( g_szError ));
 	if( g_hBDD == INVALID_HANDLE ) {
@@ -1032,6 +1086,7 @@ public OnMapStart() {
 	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.phy");
 	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.sw.vtx");
 	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.vvd");
+	AddFileToDownloadsTable("models/weapons/c_models/c_flamethrower/c_flamethrower.mdl");
 	//
 	//
 	AddFileToDownloadsTable("materials/models/weapons/v_grenadelauncher/v_grenadelauncher.vmt");

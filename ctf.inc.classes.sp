@@ -169,6 +169,9 @@ public Action:CTF_SCOUT_Energy(Handle:timer, Handle:dp1) {
 	new client = ReadPackCell(dp1);
 	new from_left = ReadPackCell(dp1);
 	
+	if( !IsPlayerAlive(client) )
+		return Plugin_Handled;
+	
 	new Float:pos[3], Float:dir[3];
 	GetClientAbsOrigin(client, pos);
 	GetClientAbsAngles(client, dir);
@@ -201,15 +204,17 @@ public Action:CTF_SCOUT_Energy(Handle:timer, Handle:dp1) {
 		WritePackCell(dp2, from_left);
 	}
 	
-	
+	return Plugin_Handled;
 }
 
 public Action:CTF_SCOUT_ulti_Task(Handle:timer, any:client) {
 	
-	g_flPlayerSpeed[client] = 400.0;
+	if( g_iPlayerClass[client] == class_scout ) {
+		g_flPlayerSpeed[client] = 400.0;
+		PrintToChat(client, "Votre ultimate a pris fin!");
+	}
 	
-	
-	PrintToChat(client, "Votre ultimate a pris fin!");
+	return Plugin_Handled;
 	
 }
 // ------------------------------------------------------------------------------------------------------------------
@@ -487,6 +492,7 @@ public CTF_SPY_ulti(client) {
 	PrintToChat(client, "Vous avez utilise votre ultimate!");
 	
 	g_fUlti_Cooldown[client] = (GetGameTime()+60);
+	g_flPlayerSpeed[client] = 350.0;
 	
 	CreateTimer(ULTI_DURATION, CTF_SPY_ulti_Task, client);
 	
@@ -515,8 +521,10 @@ public CTF_SPY_ulti(client) {
 }
 public Action:CTF_SPY_ulti_Task(Handle:timer, any:client) {
 	
-	PrintToChat(client, "Votre ultimate a pris fin!");
-	g_flPlayerSpeed[client] = 300.0;
+	if( g_iPlayerClass[client] == class_spy ) {
+		PrintToChat(client, "Votre ultimate a pris fin!");
+		g_flPlayerSpeed[client] = 300.0;
+	}
 	
 	if( g_iCustomWeapon_Entity2[client][0] > 0 && IsValidEdict(g_iCustomWeapon_Entity2[client][0]) && IsValidEntity(g_iCustomWeapon_Entity2[client][0]) ) {
 		Desyntegrate(g_iCustomWeapon_Entity2[client][0]);
@@ -552,14 +560,20 @@ public CTF_ENGINEER_ulti(client) {
 	else {
 		AddMenuItem(menu, "dis_sg", "Demonter la tourelle");
 		AddMenuItem(menu, "det_sg", "Exploser la tourelle");
-		AddMenuItem(menu, "upg_sg", "Ameliorer la tourelle [150]");
+		
+		if( g_iSentryLevel[ g_iBuild[client][build_sentry] ] == 1 ) {
+			AddMenuItem(menu, "upg_sg", "Ameliorer la tourelle [150]");
+		}
+		else {
+			AddMenuItem(menu, "upg_sg", "Ameliorer la tourelle [150]", ITEMDRAW_DISABLED);
+		}
 	}
 	
 	if( !IsValidTeleporter( g_iBuild[client][build_teleporter_in] ) ) {
 		AddMenuItem(menu, "build_tp1", "Construire un teleporteur - entree [120]");
 	}
 	else {
-		AddMenuItem(menu, "dis_tp1", "Demonter le teleporteur - entree");
+		//AddMenuItem(menu, "dis_tp1", "Demonter le teleporteur - entree");
 		AddMenuItem(menu, "det_tp1", "Exploser le teleporteur - entree");
 	}
 	
@@ -567,7 +581,7 @@ public CTF_ENGINEER_ulti(client) {
 		AddMenuItem(menu, "build_tp2", "Construire un teleporteur - sortie [120]");
 	}
 	else {
-		AddMenuItem(menu, "dis_tp2", "Demonter le teleporteur - sortie");
+		//AddMenuItem(menu, "dis_tp2", "Demonter le teleporteur - sortie");
 		AddMenuItem(menu, "det_tp2", "Exploser le teleporteur - sortie");
 	}
 	
@@ -575,11 +589,22 @@ public CTF_ENGINEER_ulti(client) {
 	SetMenuExitButton(menu, true);
 	DisplayMenu(menu, client, MENU_TIME_FOREVER);
 	
-	g_fUlti_Cooldown[client] = (GetGameTime() - 0.5);
+	g_fUlti_Cooldown[client] = 0.0;
 }
 public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 	if( action == MenuAction_Select ) {
 		
+		if( !(GetEntityFlags(client) & FL_ONGROUND) ) {
+			PrintToChat(client, "[CTF] Vous ne pouvez pas construire dans les aires.");
+			
+			CTF_ENGINEER_ulti(client);
+			return;
+		}
+		if( !IsPlayerAlive(client) ) {
+			
+			PrintToChat(client, "[CTF] Vous devez etre en vie pour construire.");
+			return;
+		}
 		new String:options[64];
 		GetMenuItem(hMenu, param2, options, 63);
 		
@@ -618,8 +643,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 					new ent = g_iBuild[client][build_sentry];
 					ServerCommand("sm_effect_fading \"%i\" \"2.0\" \"1\"", ent);
 					
-					SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.0);
-					SetEntityGravity(client, 0.0);
+					g_flPlayerSpeed[client] = 0.0;
 					
 					g_iSentryLevel[ent] = 0;
 					CreateTimer(2.0, CTF_SG_DismountPost, client);
@@ -633,13 +657,13 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 		// 		Exploser tourelle
 		else if( StrEqual(options, "det_sg") ) {
 			
-			if( !IsValidSentry(g_iBuild[client][build_sentry]) ) {
+			if( !IsValidSentry(g_iBuild[client][build_sentry]) || g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] <= 0.0 ) {
 				
 				PrintToChat(client, "[CTF] Vous n'avez pas de tourelle.");
 			}
 			else {
 				
-				g_flBuildHealth[client][build_sentry ] = 0.0;
+				g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry ] = 0.0;
 				
 				new Float:vecStart[3];
 				GetEntPropVector(g_iBuild[client][build_sentry], Prop_Send, "m_vecOrigin", vecStart);
@@ -686,8 +710,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 							new ent = g_iBuild[client][build_sentry];
 							ServerCommand("sm_effect_fading \"%i\" \"1.0\" \"1\"", ent);
 							
-							SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.0);
-							SetEntityGravity(client, 0.0);
+							g_flPlayerSpeed[client] = 0.0;
 							
 							g_iSentryLevel[ent] = 0;
 							CreateTimer(1.0, CTF_SG_UpgradeMiddle, client);
@@ -735,8 +758,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 					new ent = g_iBuild[client][build_teleporter_in];
 					ServerCommand("sm_effect_fading \"%i\" \"2.0\" \"1\"", ent);
 					
-					SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.0);
-					SetEntityGravity(client, 0.0);
+					g_flPlayerSpeed[client] = 0.0;
 					
 					CreateTimer(2.0, CTF_TP1_DismountPost, client);
 				}
@@ -752,7 +774,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 			}
 			else {
 				
-				g_flBuildHealth[client][build_teleporter_in] = 0.0;
+				g_flBuildHealth[ g_iBuild[client][build_teleporter_in] ][build_teleporter_in] = 0.0;
 				
 				new Float:vecStart[3];
 				GetEntPropVector(g_iBuild[client][build_teleporter_in], Prop_Send, "m_vecOrigin", vecStart);
@@ -794,9 +816,8 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 					new ent = g_iBuild[client][build_teleporter_out];
 					ServerCommand("sm_effect_fading \"%i\" \"2.0\" \"1\"", ent);
 					
-					SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.0);
-					SetEntityGravity(client, 0.0);
-
+					g_flPlayerSpeed[client] = 0.0;
+					
 					CreateTimer(2.0, CTF_TP2_DismountPost, client);
 				}
 			}
@@ -811,7 +832,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 			}
 			else {
 				
-				g_flBuildHealth[client][build_teleporter_out] = 0.0;
+				g_flBuildHealth[ g_iBuild[client][build_teleporter_out] ][build_teleporter_out] = 0.0;
 				
 				new Float:vecStart[3];
 				GetEntPropVector(g_iBuild[client][build_teleporter_out], Prop_Send, "m_vecOrigin", vecStart);
@@ -831,8 +852,7 @@ public Action:CTF_SG_DismountPost(Handle:timer, any:client) {
 	if( IsValidSentry( g_iBuild[client][build_sentry] ) ) {
 		g_iSentryLevel[ g_iBuild[client][build_sentry] ] = 0;
 		
-		SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.9);
-		SetEntityGravity(client, 1.05);
+		g_flPlayerSpeed[client] = 300.0;
 		
 		g_flMetal[client] += 100.0;
 		if( g_flMetal[client] >= 200.0 ) 
@@ -850,8 +870,7 @@ public Action:CTF_TP1_DismountPost(Handle:timer, any:client) {
 	if( IsValidSentry( g_iBuild[client][build_teleporter_in] ) ) {
 		g_iSentryLevel[ g_iBuild[client][build_teleporter_in] ] = 0;
 		
-		SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.9);
-		SetEntityGravity(client, 1.05);
+		g_flPlayerSpeed[client] = 300.0;
 		
 		g_flMetal[client] += 100.0;
 		if( g_flMetal[client] >= 200.0 ) 
@@ -868,8 +887,7 @@ public Action:CTF_TP2_DismountPost(Handle:timer, any:client) {
 	if( IsValidSentry( g_iBuild[client][build_teleporter_out] ) ) {
 		g_iSentryLevel[ g_iBuild[client][build_teleporter_out] ] = 0;
 		
-		SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.9);
-		SetEntityGravity(client, 1.05);
+		g_flPlayerSpeed[client] = 300.0;
 		
 		g_flMetal[client] += 100.0;
 		if( g_flMetal[client] >= 200.0 ) 
@@ -885,7 +903,7 @@ public Action:CTF_SG_UpgradeMiddle(Handle:timer, any:client) {
 	
 	SetEntityModel(g_iBuild[client][build_sentry], "models/buildables/sentry2.mdl");
 	SetEntProp(g_iBuild[client][build_sentry], Prop_Data, "m_nSolidType", 2);
-	g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] += 100.0;
+	g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] += 125.0;
 	
 	ServerCommand("sm_effect_fading \"%i\" \"1.0\" \"0\"", g_iBuild[client][build_sentry]);
 	
@@ -897,10 +915,9 @@ public Action:CTF_SG_UpgradePost(Handle:timer, any:client) {
 	
 	g_iSentryLevel[ g_iBuild[client][build_sentry] ] = 2;
 	
-	g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] += 100.0;
+	g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] += 125.0;
 	
-	SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.9);
-	SetEntityGravity(client, 1.05);
+	g_flPlayerSpeed[client] = 300.0;
 	
 	PrintToChat(client, "[CTF] Votre tourelle a ete amelioree avec succes!");
 }
@@ -996,7 +1013,7 @@ public hMenu_SelectClass(Handle:hMenu, MenuAction:action, client, param2) {
 			return;
 		}
 		
-		if( g_iPlayerClass[client] == class_none ) {
+		if( g_iPlayerClass[client] == class_none && IsPlayerAlive(client)) {
 			SetClientFrags(client, (GetClientFrags(client)+1));
 			SetClientDeaths(client, (GetClientDeaths(client)-1));
 		}

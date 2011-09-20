@@ -235,6 +235,7 @@ public CTF_NADE_BASE(client, const String:classname[]) {
 	SetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity", client);
 	SetEntPropFloat(ent, Prop_Send, "m_flElasticity", 0.4);
 	SetEntityMoveType(ent, MOVETYPE_FLYGRAVITY);
+	
 	SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PROJECTILE);
 	
 	return ent;
@@ -305,14 +306,24 @@ public CTF_NADE_EXPLODE(ent) {
 		entity = -1;
 	}
 	else {
-		client = GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity");
-		entity = ent;
+		
+		new String:classname[64];
+		GetEdictClassname(ent, classname, 63);
+		
+		if( StrContains(classname, "ctf_nade_") == 0 ) {
+			client = GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity");
+			entity = ent;
+		}
+		else {
+			return;
+		}
 	}
 	
 	new Float:vecOrigin[3];
 	
 	if( entity != -1 ) {
 		GetEntPropVector(entity, Prop_Send, "m_vecOrigin", vecOrigin);
+		SetEntProp(entity, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_DEBRIS);
 	}
 	else {
 		GetClientEyePosition(client, vecOrigin);
@@ -408,111 +419,115 @@ public ConcExplode(client, concId, bool:handHeld) {
 	}
 }
 public ConcPlayer(victim, Float:center[3], attacker, bool:hh) {
-	/*
-	new Float:pSpd[3], Float:cPush[3], Float:pPos[3], Float:distance, Float:pointDist, Float:calcSpd, Float:baseSpd;
 	
-	GetClientAbsOrigin(victim, pPos);
-	pPos[2] += 48.0;
-	
-	GetEntPropVector(victim, Prop_Data, "m_vecVelocity", pSpd);
-	distance = GetVectorDistance(pPos, center);
-	
-	SubtractVectors(pPos, center, cPush);
-	NormalizeVector(cPush, cPush);
-	pointDist = FloatDiv(distance, radius);
-	
-	baseSpd = 650.0;
-	
-	if( 0.25 > pointDist ) {
-		pointDist = 0.25;
-	}
-	
-	calcSpd = baseSpd * pointDist;
-
-	calcSpd = -1.0*Cosine( (calcSpd / baseSpd) * 3.141592 ) * ( baseSpd - (800.0 / 3.0) ) + ( baseSpd + (800.0 / 3.0) );
-
-	ScaleVector(cPush, calcSpd);
-	new bool:OnGround;
-	if(GetEntityFlags(victim) & FL_ONGROUND){
-		OnGround = true;
+	if( victim != attacker ) {
+		new Float:pSpd[3], Float:cPush[3], Float:pPos[3], Float:distance, Float:pointDist, Float:calcSpd, Float:baseSpd;
+		
+		GetClientAbsOrigin(victim, pPos);
+		pPos[2] += 48.0;
+		
+		GetEntPropVector(victim, Prop_Data, "m_vecVelocity", pSpd);
+		distance = GetVectorDistance(pPos, center);
+		
+		SubtractVectors(pPos, center, cPush);
+		NormalizeVector(cPush, cPush);
+		pointDist = FloatDiv(distance, 280.0);
+		
+		baseSpd = 650.0;
+		
+		if( 0.25 > pointDist ) {
+			pointDist = 0.25;
+		}
+		
+		calcSpd = baseSpd * pointDist;
+		
+		calcSpd = -1.0*Cosine( (calcSpd / baseSpd) * 3.141592 ) * ( baseSpd - (800.0 / 3.0) ) + ( baseSpd + (800.0 / 3.0) );
+		
+		if( GetClientTeam(victim) == GetClientTeam(attacker) ) {
+			ScaleVector(cPush, (calcSpd*0.2));
+		}
+		else {
+			ScaleVector(cPush, (calcSpd*0.8));
+		}
+		
+		new bool:OnGround;
+		if(GetEntityFlags(victim) & FL_ONGROUND) {
+			OnGround = true;
+		}
+		else {
+			OnGround = false;
+		}
+		if( (hh && victim != attacker) || !hh) {
+			if( pSpd[2] < 0.0 && cPush[2] > 0.0 ) {
+				pSpd[2] = 0.0;
+			}
+		}
+		
+		AddVectors(pSpd, cPush, pSpd);
+		
+		if(OnGround) {
+			if(pSpd[2] < 800.0/3.0) {
+				pSpd[2] = 800.0/3.0;
+			}
+		}
+		
+		TeleportEntity(victim, NULL_VECTOR, NULL_VECTOR, pSpd);
 	}
 	else {
-		OnGround = false;
-	}
-	if( (hh && victim != attacker) || !hh) {
-		if( pSpd[2] < 0.0 && cPush[2] > 0.0 ) {
-			pSpd[2] = 0.0;
+		new Float:vecPlayerOrigin[3], Float:vecResult[3];
+		GetClientAbsOrigin(victim, vecPlayerOrigin);
+		
+		new Float:vecDisplacement[3];
+		vecDisplacement[0] = vecPlayerOrigin[0] - center[0];
+		vecDisplacement[1] = vecPlayerOrigin[1] - center[1];
+		vecDisplacement[2] = vecPlayerOrigin[2] - center[2];
+		
+		new Float:flDistance = GetVectorLength(vecDisplacement);
+		
+		if( hh && attacker == victim) {
+			new Float:fLateral = 2.74;
+			new Float:fVertical = 4.10;
+			
+			new Float:vecVelocity[3];
+			GetEntPropVector(victim, Prop_Data, "m_vecVelocity", vecVelocity);
+			
+			vecResult[0] = vecVelocity[0] * fLateral;
+			vecResult[1] = vecVelocity[1] * fLateral;
+			vecResult[2] = vecVelocity[2] * fVertical;
+			
 		}
-	}
-
-	AddVectors(pSpd, cPush, pSpd);
-	if(OnGround) {
-		if(pSpd[2] < 800.0/3.0) {
-			pSpd[2] = 800.0/3.0;
+		else {
+			
+			new Float:verticalDistance = vecDisplacement[2];
+			vecDisplacement[2] = 0.0;
+			new Float:horizontalDistance = GetVectorLength(vecDisplacement);
+			
+			vecDisplacement[0] /= horizontalDistance;
+			vecDisplacement[1] /= horizontalDistance;
+			vecDisplacement[2] /= horizontalDistance;
+			
+			vecDisplacement[0] *= (horizontalDistance * (8.4 - 0.015 * flDistance) );
+			vecDisplacement[1] *= (horizontalDistance * (8.4 - 0.015 * flDistance) );
+			vecDisplacement[2] = (verticalDistance * (12.6 - 0.0225 * flDistance) );
+			
+			vecResult[0] = vecDisplacement[0];
+			vecResult[1] = vecDisplacement[1];
+			vecResult[2] = vecDisplacement[2];		
 		}
-	}
-	
-	TeleportEntity(victim, NULL_VECTOR, NULL_VECTOR, pSpd);
-	
-	new Float:vecAngles[3];
-	vecAngles[0] = 50.0;
-	vecAngles[1] = 50.0;
-	vecAngles[2] = 50.0;
-	
-	SetEntPropVector(victim, Prop_Send, "m_vecPunchAngle", vecAngles);
-	SetEntPropFloat(victim, Prop_Send, "m_flFlashDuration", 5.0);
-	SetEntPropFloat(victim, Prop_Send, "m_flFlashMaxAlpha", 50.0);
-	*/
-	
-	new Float:vecPlayerOrigin[3], Float:vecResult[3];
-	GetClientAbsOrigin(victim, vecPlayerOrigin);
-	
-	new Float:vecDisplacement[3];
-	vecDisplacement[0] = vecPlayerOrigin[0] - center[0];
-	vecDisplacement[1] = vecPlayerOrigin[1] - center[1];
-	vecDisplacement[2] = vecPlayerOrigin[2] - center[2];
-	
-	new Float:flDistance = GetVectorLength(vecDisplacement);
-	
-	if( hh && attacker == victim) {
-		new Float:fLateral = 2.74;
-		new Float:fVertical = 4.10;
 		
-		new Float:vecVelocity[3];
-		GetEntPropVector(victim, Prop_Data, "m_vecVelocity", vecVelocity);
+		new flags = GetEntityFlags(victim);
+		if( flags & FL_ONGROUND ) {
+			
+			SetEntProp(victim, Prop_Data, "m_fFlags", flags&~FL_ONGROUND);
+			SetEntPropEnt(victim, Prop_Send, "m_hGroundEntity", -1);
+			
+			vecPlayerOrigin[2] += 1.0;
+			TeleportEntity(victim, vecPlayerOrigin, NULL_VECTOR, NULL_VECTOR);
+		}
 		
-		new Float:vecLatVelocity[3];
-		vecLatVelocity[0] = vecVelocity[0] * 1.0;
-		vecLatVelocity[1] = vecVelocity[1] * 1.0;
-		vecLatVelocity[2] = vecVelocity[2] * 0.0;
-		
-		new Float:flHorizontalSpeed = GetVectorLength(vecLatVelocity);
-		
-		vecResult[0] = vecVelocity[0] * fLateral;
-		vecResult[1] = vecVelocity[1] * fLateral;
-		vecResult[2] = vecVelocity[2] * fVertical;
+		TeleportEntity(victim, NULL_VECTOR, NULL_VECTOR, vecResult);
 		
 	}
-	else {
-		
-		new Float:verticalDistance = vecDisplacement[2];
-		vecDisplacement[2] = 0.0;
-		new Float:horizontalDistance = GetVectorLength(vecDisplacement);
-		
-		vecDisplacement[0] /= horizontalDistance;
-		vecDisplacement[1] /= horizontalDistance;
-		vecDisplacement[2] /= horizontalDistance;
-		
-		vecDisplacement[0] *= (horizontalDistance * (8.4 - 0.015 * flDistance) );
-		vecDisplacement[1] *= (horizontalDistance * (8.4 - 0.015 * flDistance) );
-		vecDisplacement[2] = (verticalDistance * (12.6 - 0.0225 * flDistance) );
-		
-		vecResult[0] = vecDisplacement[0];
-		vecResult[1] = vecDisplacement[1];
-		vecResult[2] = vecDisplacement[2];		
-	}
-	
-	TeleportEntity(victim, NULL_VECTOR, NULL_VECTOR, vecResult);
 	
 	new Float:vecAngles[3];
 	vecAngles[0] = 50.0;
@@ -607,7 +622,7 @@ public CTF_NADE_NAIL_Shoot(entity) {
 		
 		CloseHandle(trace);
 		
-		if( GetClientTeam( attacker ) == CS_TEAM_T ) {
+		if( IsValidClient(attacker) && GetClientTeam(attacker) == CS_TEAM_T ) {
 			TE_SetupBeamPoints( vecOrigin, vecDest, g_cPhysicBeam, 0, 0, 0, 0.1, 3.0, 3.0, 1, 0.0, {250, 200, 200, 20}, 0);
 		}
 		else {
