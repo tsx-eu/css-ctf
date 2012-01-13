@@ -465,10 +465,23 @@ public ConcPlayer(victim, Float:center[3], attacker, bool:hh) {
 		
 		AddVectors(pSpd, cPush, pSpd);
 		
-		if(OnGround) {
+		if( OnGround ) {
 			if(pSpd[2] < 800.0/3.0) {
 				pSpd[2] = 800.0/3.0;
 			}
+		}
+		
+		new Float:vecPlayerOrigin[3];
+		GetClientAbsOrigin(victim, vecPlayerOrigin);
+		
+		if( OnGround ) {
+			
+			new flags = GetEntityFlags(victim);
+			SetEntityFlags(victim, (flags&~FL_ONGROUND) );
+			SetEntPropEnt(victim, Prop_Send, "m_hGroundEntity", -1);
+			
+			vecPlayerOrigin[2] += 1.0;
+			TeleportEntity(victim, vecPlayerOrigin, NULL_VECTOR, NULL_VECTOR);
 		}
 		
 		TeleportEntity(victim, NULL_VECTOR, NULL_VECTOR, pSpd);
@@ -515,10 +528,11 @@ public ConcPlayer(victim, Float:center[3], attacker, bool:hh) {
 			vecResult[2] = vecDisplacement[2];		
 		}
 		
+		
 		new flags = GetEntityFlags(victim);
 		if( flags & FL_ONGROUND ) {
 			
-			SetEntProp(victim, Prop_Data, "m_fFlags", flags&~FL_ONGROUND);
+			SetEntityFlags(victim, (flags&~FL_ONGROUND) );
 			SetEntPropEnt(victim, Prop_Send, "m_hGroundEntity", -1);
 			
 			vecPlayerOrigin[2] += 1.0;
@@ -535,12 +549,12 @@ public ConcPlayer(victim, Float:center[3], attacker, bool:hh) {
 	vecAngles[2] = 50.0;
 	
 	SetEntPropVector(victim, Prop_Send, "m_vecPunchAngle", vecAngles);
-	SetEntPropFloat(victim, Prop_Send, "m_flFlashDuration", 5.0);
-	SetEntPropFloat(victim, Prop_Send, "m_flFlashMaxAlpha", 50.0);
+	SetEntPropFloat(victim, Prop_Send, "m_flFlashDuration", GetRandomFloat(4.900000, 5.100000));
+	SetEntPropFloat(victim, Prop_Send, "m_flFlashMaxAlpha", GetRandomFloat(49.900000, 50.100000));
 }
 public CTF_NADE_EXPL_Frag(client, entity, ent, Float:vecOrigin[3]) {
 	
-	ExplosionDamage(vecOrigin, 100.0, 400.0, client);
+	ExplosionDamage(vecOrigin, 100.0, 400.0, client, entity);
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 250, 250);
 	TE_SendToAll();
 	
@@ -579,7 +593,7 @@ public Action:CTF_NADE_EXPL_Nail_Task(Handle:timer, any:entity) {
 	new Float:vecOrigin[3];
 	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", vecOrigin);
 	
-	ExplosionDamage(vecOrigin, 100.0, 400.0, client);
+	ExplosionDamage(vecOrigin, 100.0, 400.0, client, entity);
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 200, 200);
 	TE_SendToAll();
 }
@@ -639,7 +653,7 @@ public CTF_NADE_NAIL_Shoot(entity) {
 }
 public CTF_NADE_EXPL_Mirv(client, entity, ent, Float:vecOrigin[3]) {
 	
-	ExplosionDamage(vecOrigin, 100.0, 400.0, client);
+	ExplosionDamage(vecOrigin, 100.0, 400.0, client, entity);
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 200, 200);
 	TE_SendToAll();
 	
@@ -666,7 +680,7 @@ public CTF_NADE_EXPL_Mirv(client, entity, ent, Float:vecOrigin[3]) {
 }
 public CTF_NADE_EXPL_MirvLet(client, entity, ent, Float:vecOrigin[3]) {
 	
-	ExplosionDamage(vecOrigin, 80.0, 200.0, client);
+	ExplosionDamage(vecOrigin, 80.0, 200.0, client, entity);
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 200, 200);
 	TE_SendToAll();
 	
@@ -766,7 +780,7 @@ public Action:CTF_NADE_EXPL_EMP_Task(Handle:timer, any:ent) {
 		TE_SendToAll();
 	}
 	
-	ExplosionDamage(vecOrigin, damage, 600.0, client);
+	ExplosionDamage(vecOrigin, damage, 600.0, client, entity);
 	vecOrigin[2] += 25.0;
 	
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 40, 40);

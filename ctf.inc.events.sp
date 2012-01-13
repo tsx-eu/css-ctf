@@ -170,6 +170,13 @@ public Action:EventSpawn(Handle:Event, const String:Name[], bool:Broadcast) {
 		}
 	}
 	
+	if( GetClientTeam(client) == CS_TEAM_CT ) {
+		Colorize(client, 150, 150, 255, 255);
+	}
+	else if( GetClientTeam(client) == CS_TEAM_T ) {
+		Colorize(client, 255, 150, 150, 255);
+	}
+	
 	if( g_iPlayerClass[client] == class_none ) {
 		
 		g_flPlayerSpeed[client] = 0.0;
@@ -185,11 +192,11 @@ public Action:EventSpawn(Handle:Event, const String:Name[], bool:Broadcast) {
 	CTF_WEAPON_CUSTOM_CLEAN(client);
 	CTF_CLASS_init(client);
 	
-	Colorize(client, 255, 255, 255, 255);
 	return Plugin_Continue;
 }
 public Action:EventDeath(Handle:Event, const String:Name[], bool:Broadcast) {
 	new client = GetClientOfUserId(GetEventInt(Event, "userid"));
+	new attacker = GetClientOfUserId(GetEventInt(Event, "attacker"));
 	
 	g_iRevieveTime[client] = (GetClientCount());
 	if( g_iRevieveTime[client] < 5 )
@@ -209,6 +216,24 @@ public Action:EventDeath(Handle:Event, const String:Name[], bool:Broadcast) {
 	g_iContaminated[client] = 0;
 	g_fContaminate[client] = 0.0;
 	
+	if( IsValidClient(g_iBurning[client]) && g_fBurning[client] > GetGameTime() ) {
+		Client_SetScore(g_iBurning[client], Client_GetScore(g_iBurning[client])+1);	
+		
+		if( !IsValidClient(attacker) ) {
+			
+			SetEventBroadcast(Event, true);
+			
+			Client_SetScore(client, Client_GetScore(client)+1);
+			
+			
+			new Handle:ev = CreateEvent("player_death");
+			SetEventInt(ev, "userid", GetClientUserId(client));
+			SetEventInt(ev, "attacker", GetClientUserId(g_iBurning[client]));
+			SetEventString(ev, "weapon", "ctf_flame");
+			SetEventBool(ev, "headshot", false);
+			FireEvent(ev);
+		}
+	}
 	g_iBurning[client] = 0;
 	g_fBurning[client] = 0.0;
 	
@@ -279,7 +304,6 @@ public EventBulletImpact(Handle:event,const String:name[],bool:dontBroadcast) {
 				DealDamage(g_iBuild[a][build_teleporter_out], GetRandomInt(40, 60), a);
 			}
 		}
-		
 	}
 }
 // ------------------------------------------------------------------------------------------------------------------
@@ -607,11 +631,9 @@ public OnGameFrame() {
 		if( StrContains(classname, "ctf_flame") == 0 ) {
 			
 			if( g_flCustomWeapon_Entity3[i] < GetGameTime() ) {
-				//PrintToChatAll("%i:%i", i, GetEntProp(i, Prop_Data, "m_nWaterLevel"));
 				
 				if( GetEntProp(i, Prop_Data, "m_nWaterLevel") > 0 ) {
 					AcceptEntityInput(i, "Kill");
-					//RemoveEdict(i);
 					continue;
 				}
 			}
@@ -639,7 +661,7 @@ public OnGameFrame() {
 					
 					
 					new Float:dist = GetVectorDistance(vecOrigin, vecFlag, false);
-					if( dist <= 32.0 ) {
+					if( dist <= 40.0 ) {
 						CTF_FlagTouched(client, g_iFlags_Entity[Flag_Type], Flag_Type);
 					}
 				}
@@ -652,7 +674,7 @@ public OnGameFrame() {
 				new Float:dist = GetVectorDistance(g_vecSecu[Flag_Type], vecOrigin);
 				new Float:dist2 = GetVectorDistance(g_vecSecu[Flag_Type], vecOrigin2);
 				
-				if( dist <= 32.0 || dist2 <= 32.0 ) {
+				if( dist <= 40.0 || dist2 <= 40.0 ) {
 					
 					if( Flag_Type == _:flag_red && GetClientTeam(client) == CS_TEAM_CT ) {
 						
@@ -709,6 +731,8 @@ public OnGameFrame() {
 		}
 		
 		if( g_iPlayerClass[client] == class_sniper ) {
+			
+			CTF_SNIPER_dot(client);
 			if( g_fUlti_Cooldown[client] > (GetGameTime()+(ULTI_COOLDOWN-ULTI_DURATION)) ) {
 				new WeaponIndex = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
 				new String:WeaponName[64]; GetEdictClassname(WeaponIndex, WeaponName, 63);
@@ -756,6 +780,13 @@ public OnGameFrame() {
 		
 		if( g_iPlayerClass[client] == class_medic ) {
 			
+			if( GetRandomInt(0, 150) == 100 ) {
+				new current = Entity_GetHealth(client);
+				
+				if( current < Entity_GetMaxHealth(client) ) {
+					Entity_SetHealth(client, current+1);
+				}
+			}
 			
 			if( IsValidClient(g_iCustomWeapon_Entity2[client][2]) ) {
 				
@@ -872,15 +903,7 @@ public OnGameFrame() {
 			if( g_fContaminate[client] < GetGameTime() ) {
 				CTF_MEDIC_HURTS(client);
 			}
-		}
-		
-		if( g_iBurning[client] > 0 ) {
-			if( g_fBurning[client] < GetGameTime() ) {
-				DealDamage(client, GetRandomInt(2, 4), g_iBurning[client], DMG_BURN);
-				g_fBurning[client] = (GetGameTime() + GetRandomFloat(0.5, 1.5));
-			}
-		}
-		
+		}		
 		
 		if( g_fRestoreSpeed[client][0] < GetGameTime() && g_fRestoreSpeed[client][1] > 0.01 ) {			
 			g_flPlayerSpeed[client] = g_fRestoreSpeed[client][1];
@@ -1409,7 +1432,7 @@ public OnMapStart() {
 	g_cSmokeBeam = PrecacheModel("materials/sprites/xbeam2.vmt");
 	g_cExplode = PrecacheModel("materials/sprites/old_aexplo.vmt");
 	g_cScorch = PrecacheModel("materials/decals/smscorch1.vmt", true);
-	if( g_cScorch ) { }
+	g_cGlow = PrecacheModel("sprites/redglow1.vmt");
 	//
 	//
 	ServerCommand("mp_ignore_round_win_conditions 1");
@@ -1424,6 +1447,8 @@ public OnMapStart() {
 	
 	PrecacheParticleSystem("teleportedin_blue");
 	PrecacheParticleSystem("teleportedin_red");
+	
+	g_cScorch = PrecacheDecal("decals/unburrow.vmt", true);
 }
 public OnMapEnd() {
 	

@@ -80,7 +80,48 @@ public OnPluginStart() {
 	g_hPosition = EndPrepSDKCall();
 	
 	AddNormalSoundHook(NormalSHook:sound_hook);
-} 
+	
+	CreateTimer(1.0, CTF_DUMP_CHECK, _, TIMER_REPEAT);
+}
+public Action:CTF_DUMP_CHECK(Handle:timer, any:zomg) {
+	new amount = 0;
+	for(new i=GetMaxClients(); i<2049; i++) {
+		if( !IsValidEdict(i) )
+			continue;
+		if( !IsValidEntity(i) )
+			continue;
+		
+		amount++;
+	}
+	
+	if( amount > 1500 ) {
+		CTF_DUMP();
+		PrintToServer("[CTF] Le plugin a crashe, merci de prevenir KoSSoLaX` avec l'heure du crash.");
+		LogToGame("[CTF] Le plugin a crashe, merci de prevenir KoSSoLaX` avec l'heure du crash.");
+		ServerCommand("sm plugins unload ctf");
+	}
+}
+public CTF_DUMP() {
+	for(new i=GetMaxClients(); i<2049; i++) {
+		if( !IsValidEdict(i) )
+			continue;
+		if( !IsValidEntity(i) )
+			continue;
+		
+		new String:classname[128];
+		GetEdictClassname(i, classname, sizeof(classname));
+		
+		if( StrContains(classname, "prop_", false) == 0 )
+			continue;
+		
+		Format(classname, sizeof(classname), "[DUMP] %i:%s", i, classname);
+		LogToFile("ctf_fail.log", classname);
+	}
+}
+public Action:OnGetGameDescription(String:gameDesc[64]) {
+	Format(gameDesc, sizeof(gameDesc), "CSS-CTF");
+	return Plugin_Changed;
+}
 public CTF_Reset_Player(i) {
 	g_iLastTeam[i] = 0;
 	g_iRevieveTime[i] = 0;

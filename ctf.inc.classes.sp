@@ -668,7 +668,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 				new Float:vecStart[3];
 				GetEntPropVector(g_iBuild[client][build_sentry], Prop_Send, "m_vecOrigin", vecStart);
 				
-				ExplosionDamage(vecStart, 200.0, 200.0, client);
+				ExplosionDamage(vecStart, 200.0, 200.0, client, g_iBuild[client][build_sentry]);
 				DealDamage(g_iBuild[client][build_sentry], 1000, client);
 				
 				PrintToChat(client, "[CTF] Votre tourelle a ete detruite!");
@@ -779,7 +779,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 				new Float:vecStart[3];
 				GetEntPropVector(g_iBuild[client][build_teleporter_in], Prop_Send, "m_vecOrigin", vecStart);
 				
-				ExplosionDamage(vecStart, 100.0, 100.0, client);
+				ExplosionDamage(vecStart, 100.0, 100.0, client, g_iBuild[client][build_teleporter_in]);
 				DealDamage(g_iBuild[client][build_teleporter_in], 1000, client);
 				
 				PrintToChat(client, "[CTF] Votre teleporteur a ete detruit!");
@@ -837,7 +837,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 				new Float:vecStart[3];
 				GetEntPropVector(g_iBuild[client][build_teleporter_out], Prop_Send, "m_vecOrigin", vecStart);
 				
-				ExplosionDamage(vecStart, 100.0, 100.0, client);
+				ExplosionDamage(vecStart, 100.0, 100.0, client, g_iBuild[client][build_teleporter_out]);
 				DealDamage(g_iBuild[client][build_teleporter_out], 1000, client);
 				
 				PrintToChat(client, "[CTF] Votre teleporteur a ete detruit!");
@@ -903,7 +903,7 @@ public Action:CTF_SG_UpgradeMiddle(Handle:timer, any:client) {
 	
 	SetEntityModel(g_iBuild[client][build_sentry], "models/buildables/sentry2.mdl");
 	SetEntProp(g_iBuild[client][build_sentry], Prop_Data, "m_nSolidType", 2);
-	g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] += 125.0;
+	g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] += 250.0;
 	
 	ServerCommand("sm_effect_fading \"%i\" \"1.0\" \"0\"", g_iBuild[client][build_sentry]);
 	
@@ -915,7 +915,7 @@ public Action:CTF_SG_UpgradePost(Handle:timer, any:client) {
 	
 	g_iSentryLevel[ g_iBuild[client][build_sentry] ] = 2;
 	
-	g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] += 125.0;
+	g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] += 250.0;
 	
 	g_flPlayerSpeed[client] = 300.0;
 	
@@ -1024,4 +1024,33 @@ public hMenu_SelectClass(Handle:hMenu, MenuAction:action, client, param2) {
 		if( g_iPlayerClass[client] != class_engineer )
 			CTF_ENGINEER_DETALL(client);
 	}
+}
+public CTF_SNIPER_dot(client) {
+	
+	new String:weapon[32];
+	GetClientWeapon(client, weapon, sizeof(weapon));
+	
+	if( !StrEqual(weapon, "weapon_awp", false) )
+		return;
+	
+	new Float:vecTarget[3];
+	GetPlayerEye(client, vecTarget);
+	
+	TE_SetupGlowSprite( vecTarget, g_cGlow, 0.1, 0.1, 255);
+	TE_SendToAll();
+}
+public bool:GetPlayerEye(client, Float:pos[3]) {
+	new Float:vAngles[3], Float:vOrigin[3];
+	GetClientEyePosition(client,vOrigin);
+	GetClientEyeAngles(client, vAngles);
+	
+	new Handle:trace = TR_TraceRayFilterEx(vOrigin, vAngles, MASK_SHOT, RayType_Infinite, FilterToOne, client);
+	
+	if(TR_DidHit(trace)) {
+		TR_GetEndPosition(pos, trace);
+		CloseHandle(trace);
+		return true;
+	}
+	CloseHandle(trace);
+	return false;
 }

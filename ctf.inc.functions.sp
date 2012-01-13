@@ -48,6 +48,8 @@ stock CTF_DropFlag(client, thrown=false) {
 	GetClientEyePosition(client, vecOrigin);
 	GetClientEyeAngles(client, vecAngles);
 	
+	vecAngles[0] += 10.0;
+	
 	if( thrown ) {
 		
 		vecOrigin[0] = (vecOrigin[0] + (60.0 * Cosine( degrees_to_radians( vecAngles[1] ) ) ) );
@@ -56,13 +58,15 @@ stock CTF_DropFlag(client, thrown=false) {
 		
 		vecPush[0] = ( FLAG_SPEED * Cosine( degrees_to_radians(vecAngles[1]) ) );
 		vecPush[1] = ( FLAG_SPEED * Sine( degrees_to_radians(vecAngles[1]) ) );
-		vecPush[2] = ( (FLAG_SPEED/4.0) * Sine( degrees_to_radians(vecAngles[0]) ) );
+		vecPush[2] = ( (FLAG_SPEED/2.0) * Cosine( degrees_to_radians( vecAngles[0] ) ) );
 	}
 	else {
 		
 		vecOrigin[2] = (vecOrigin[2] - 20.0);
 		vecPush[2] = 20.0;
 	}
+	
+	vecPush[2] += 50.0;
 	
 	SetEntProp(g_iFlags_Entity[iFlagType], Prop_Send, "m_fFlags", 0);
 	SetEntProp(g_iFlags_Entity[iFlagType], Prop_Send, "m_flSimulationTime", 0);
@@ -150,7 +154,11 @@ public CTF_SpawnFlag(Flag_Type) {
 	
 	SetEntityModel(ent1, "models/DeadlyDesire/ctf/flag.mdl");
 	SetEntityMoveType(ent1, MOVETYPE_FLYGRAVITY);
+	
 	SetEntProp(ent1, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_DEBRIS);
+//	SetEntProp(ent1, Prop_Data, "m_nSolidType", SOLID_NONE);
+	SetEntProp(ent1, Prop_Send, "m_usSolidFlags", FSOLID_NOT_SOLID);
+	
 	SetEntPropFloat(ent1, Prop_Send, "m_flElasticity", 0.1);
 	
 	g_vecFlags[Flag_Type][2] += 10.0;
@@ -321,11 +329,34 @@ public CTF_FixAngles() {
 		}
 	}
 }
-stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index, Float:cumul = 1.0) {
+stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index, index2) {
 	
-	new Float:PlayerVec[3], Float:distance, Float:falloff = (damage/lenght), Float:center2[3];
+	new Float:PlayerVec[3], Float:distance, Float:falloff = (damage/lenght);
 	
-	origin[2] += 10.0;
+	new Float:min[3] = { -8.0, -8.0, -8.0};
+	new Float:max[3] = {  8.0,  8.0,  8.0};
+	new Float:origin2[3], Float:normal[3];
+	
+	new Handle:tr = TR_TraceHullFilterEx(origin, origin, min, max, MASK_SHOT, TraceEntityFilterStuff2);
+	TR_GetPlaneNormal(tr, normal);
+	TR_GetEndPosition(origin2, tr);
+	
+	CloseHandle(tr);
+	
+	if( GetVectorDistance(origin, origin2) <= 32.0 ) {
+		origin[0] = origin2[0];
+		origin[1] = origin2[1];
+		origin[2] = origin2[2];
+	}
+	
+	TE_SetupExplosion(origin, g_cExplode, 1.0, 1, 0, RoundFloat(lenght), RoundFloat(lenght), normal);
+	TE_SendToAll();
+	
+	TE_Start("World Decal");
+	TE_WriteVector("m_vecOrigin", origin);
+	TE_WriteNum("m_nIndex", g_cScorch);
+	TE_SendToAll();
+	
 	
 	for(new i=1; i<=GetMaxEntities(); i++) {
 		if( !IsValidEdict(i) )
@@ -333,8 +364,6 @@ stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index, Float:
 		if( !IsValidEntity(i) )
 			continue;
 		if( !IsMoveAble(i) && !IsValidSentry(i) && !IsValidTeleporter(i) )
-			continue;
-		if( !IsValidClient(i) )
 			continue;
 		
 		if( IsValidClient(i) ) {
@@ -352,12 +381,13 @@ stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index, Float:
 		TR_TraceRayFilter(origin, PlayerVec, MASK_SHOT, RayType_EndPoint, TraceEntityFilterStuff2);
 		new Float:fraction = (TR_GetFraction()) * 1.5;
 		
+		if( TR_GetEntityIndex() == i )
+			fraction = 1.0;
+		
 		if( fraction > 1.0 )
 			fraction = 1.0;
 		if( fraction < 0.0 )
 			fraction = 0.0;
-		
-		TR_GetEndPosition(center2);
 		
 		dmg *= fraction;
 		
@@ -373,30 +403,7 @@ stock ExplosionDamage(Float:origin[3], Float:damage, Float:lenght, index, Float:
 		
 		DealDamage(i, RoundFloat(dmg), index);
 	}
-	
-	origin[2] -= 5.0;
-	
-	new ExplosionIndex = CreateEntityByName("env_explosion");
-	if (ExplosionIndex != -1) {
-		
-		SetEntProp(ExplosionIndex, Prop_Data, "m_spawnflags", 2031);
-		SetEntProp(ExplosionIndex, Prop_Data, "m_iMagnitude", 100.0);
-		SetEntProp(ExplosionIndex, Prop_Data, "m_iRadiusOverride", 400.0);
-		
-		DispatchSpawn(ExplosionIndex);
-		ActivateEntity(ExplosionIndex);
-		
-		TeleportEntity(ExplosionIndex, origin, NULL_VECTOR, NULL_VECTOR);
-		AcceptEntityInput(ExplosionIndex, "Explode");
-		
-		AcceptEntityInput(ExplosionIndex, "Kill");
-	}
-	
-	origin[2] += 5.0;
-	
-	MakeRadiusPush2(origin, lenght, (damage * 10.0 * cumul));
-	
-	origin[2] -= 10.0;
+	MakeRadiusPush2(origin, lenght, (damage * 10.0));
 }
 public bool:TraceEntityFilterStuff2(entity, mask) {
 
@@ -460,11 +467,8 @@ stock MakeRadiusPush2( Float:center[3], Float:lenght, Float:damage) {
 		new flags = GetEntityFlags(i);
 		if( vecPush[2] > 0.0 && (flags & FL_ONGROUND) ) {
 			
-			SetEntProp(i, Prop_Data, "m_fFlags", flags&~FL_ONGROUND);
+			SetEntityFlags(i, (flags&~FL_ONGROUND) );
 			SetEntPropEnt(i, Prop_Send, "m_hGroundEntity", -1);
-			
-			//vecOrigin[2] += 0.01;
-			//TeleportEntity(i, vecOrigin, NULL_VECTOR, NULL_VECTOR);
 		}
 		TeleportEntity(i, NULL_VECTOR, NULL_VECTOR, vecPush);
 	}
@@ -601,7 +605,7 @@ public ExplodeC4(index) {
 	EmitSoundFromOrigin(sound, vecOrigin);
 	
 	vecOrigin[2] -= 10.0;
-	ExplosionDamage(vecOrigin, 800.0, 600.0, GetEntPropEnt(index, Prop_Send, "m_hOwnerEntity"));
+	ExplosionDamage(vecOrigin, 800.0, 600.0, GetEntPropEnt(index, Prop_Send, "m_hOwnerEntity"), index);
 	
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 600, 600);
 	TE_SendToAll();
@@ -743,6 +747,8 @@ stock CTF_FillupAmmunition(client, entity, grenade = false) {
 				g_iPlayerGrenadeAmount[client][1] = 4;
 			}
 		}
+		
+		EmitSoundToClient(client, "items/itempickup.wav");
 	}
 }
 public CTF_FillupAmmunition2(const String:output[], caller, activator, Float:delay) {

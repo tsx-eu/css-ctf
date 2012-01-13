@@ -20,7 +20,7 @@ public CTF_ENGINEER_DETALL(client) {
 		new Float:vecStart[3];
 		GetEntPropVector(g_iBuild[client][build_sentry], Prop_Send, "m_vecOrigin", vecStart);
 		
-		ExplosionDamage(vecStart, 200.0, 200.0, client);
+		ExplosionDamage(vecStart, 200.0, 200.0, client, g_iBuild[client][build_sentry]);
 		DealDamage(g_iBuild[client][build_sentry], 10000, client);
 	}
 	
@@ -31,7 +31,7 @@ public CTF_ENGINEER_DETALL(client) {
 		new Float:vecStart[3];
 		GetEntPropVector(g_iBuild[client][build_teleporter_in], Prop_Send, "m_vecOrigin", vecStart);
 		
-		ExplosionDamage(vecStart, 200.0, 200.0, client);
+		ExplosionDamage(vecStart, 200.0, 200.0, client, g_iBuild[client][build_teleporter_in]);
 		DealDamage(g_iBuild[client][build_teleporter_in], 10000, client);
 	}
 	
@@ -42,7 +42,7 @@ public CTF_ENGINEER_DETALL(client) {
 		new Float:vecStart[3];
 		GetEntPropVector(g_iBuild[client][build_teleporter_out], Prop_Send, "m_vecOrigin", vecStart);
 		
-		ExplosionDamage(vecStart, 200.0, 200.0, client );
+		ExplosionDamage(vecStart, 200.0, 200.0, client, g_iBuild[client][build_teleporter_out]);
 		DealDamage(g_iBuild[client][build_teleporter_out], 10000, client);
 	}
 }
@@ -95,9 +95,40 @@ public CTF_SG_Build(client) {
 		return;
 	}
 	
+	
 	if( g_flMetal[client] < 150.0 ) {
 		PrintToChat(client, "[CTF] Vous n'avez pas assez de metal!");
 		return;
+	}
+	if(! (GetEntityFlags(client) & FL_ONGROUND) ) {
+		PrintToChat(client, "[CTF] Impossible de construire dans les aires");
+		return;
+	}
+	
+	new Float:vecOrigin[3], Float:vecAngles[3];
+	GetClientAbsOrigin(client, vecOrigin);
+	GetClientAbsAngles(client, vecAngles);
+	
+	vecOrigin[0] = (vecOrigin[0] + (50.0 * Cosine( degrees_to_radians(vecAngles[1]) ) ) );
+	vecOrigin[1] = (vecOrigin[1] + (50.0 * Sine(  degrees_to_radians(vecAngles[1]) ) ) );
+	
+	for(new Flag_Type = 0; Flag_Type<=2; Flag_Type++) {
+		
+		if( g_iFlags_Entity[Flag_Type] > 1 && IsValidEdict(g_iFlags_Entity[Flag_Type]) && IsValidEntity(g_iFlags_Entity[Flag_Type]) ) {
+			new String:classname[128];
+			GetEdictClassname(g_iFlags_Entity[Flag_Type], classname, 127);
+			if( StrEqual(classname, "ctf_flag", false) ) {
+				new Float:vecFlag[3];
+				GetEntPropVector(g_iFlags_Entity[Flag_Type], Prop_Send, "m_vecOrigin", vecFlag);
+				
+				
+				new Float:dist = GetVectorDistance(vecOrigin, vecFlag, false);
+				if( dist <= 64.0 ) {
+					PrintToChat(client, "[CTF] Impossible de construire aussi pres du drapeau.");
+					return;
+				}
+			}
+		}
 	}
 	
 	g_flMetal[client] -= 150.0;
@@ -121,13 +152,6 @@ public CTF_SG_Build(client) {
 	SetEntProp( ent, Prop_Data, "m_takedamage", 1);
 	SetEntProp( ent, Prop_Data, "m_iHealth", 1);
 	SetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity", client);
-	
-	new Float:vecOrigin[3], Float:vecAngles[3];
-	GetClientAbsOrigin(client, vecOrigin);
-	GetClientAbsAngles(client, vecAngles);
-	
-	vecOrigin[0] = (vecOrigin[0] + (45.0 * Cosine( degrees_to_radians(vecAngles[1]) ) ) );
-	vecOrigin[1] = (vecOrigin[1] + (45.0 * Sine(  degrees_to_radians(vecAngles[1]) ) ) );
 	
 	new Float:vecMins[3], Float:vecMaxs[3];
 	Entity_GetMinSize(ent, vecMins);
@@ -175,7 +199,7 @@ public CTF_SG_Build(client) {
 	TeleportEntity(ent, vecOrigin, vecAngles, NULL_VECTOR);
 	
 	g_iBuild[client][build_sentry] = ent;
-	g_flBuildHealth[ent][build_sentry] = 250.0;
+	g_flBuildHealth[ent][build_sentry] = 500.0;
 	
 	ServerCommand("sm_effect_fading \"%i\" \"2.0\" \"0\"", ent);
 	
@@ -187,6 +211,11 @@ public CTF_SG_Build(client) {
 	CreateTimer(2.0, CTF_SG_BuildPost, client);
 	
 	SDKHook(ent, SDKHook_OnTakeDamage,	OnTakeDamage);
+	
+	
+	SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PLAYER);
+	SetEntProp(ent, Prop_Data, "m_nSolidType", SOLID_VPHYSICS);
+	SetEntProp(ent, Prop_Send, "m_usSolidFlags", FSOLID_VOLUME_CONTENTS);
 }
 public Action:CTF_SG_BuildPost(Handle:timer, any:client) {
 	
@@ -566,10 +595,8 @@ public CTF_TP_Build(client, build_teleporter) {
 	
 	SDKHook(ent, SDKHook_OnTakeDamage,	OnTakeDamage);
 	SDKHook(ent, SDKHook_ShouldCollide, ShouldCollide);
-	
 }
-public bool:ShouldCollide(entity, collisiongroup, contentsmask, bool:result)
-{
+public bool:ShouldCollide(entity, collisiongroup, contentsmask, bool:result) {
 	result = false;
 	return false;
 }

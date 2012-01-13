@@ -96,6 +96,17 @@ public CTF_WEAPON_CUSTOM_CLEAN(client) {
 		
 		g_iCustomWeapon_Entity[client][1] = -1;
 	}
+	
+	
+	if( g_iCustomWeapon_Entity2[client][0] > 0 && IsValidEdict(g_iCustomWeapon_Entity2[client][0]) && IsValidEntity(g_iCustomWeapon_Entity2[client][0]) )
+		AcceptEntityInput(g_iCustomWeapon_Entity2[client][0], "Kill");
+	if( g_iCustomWeapon_Entity2[client][1] > 0 && IsValidEdict(g_iCustomWeapon_Entity2[client][1]) && IsValidEntity(g_iCustomWeapon_Entity2[client][1]) )
+		AcceptEntityInput(g_iCustomWeapon_Entity2[client][1], "Kill");
+	
+	g_iCustomWeapon_Entity2[client][0] = -1;
+	g_iCustomWeapon_Entity2[client][1] = -1;
+	g_iCustomWeapon_Entity2[client][2] = -1;
+	
 }
 public Action:CTF_WEAPON_CUSTOM_ACTION(client, &buttons) {
 	if( !IsPlayerAlive(client) )
@@ -287,10 +298,10 @@ public CTF_WEAPON_RPG_FireRocket_TOUCH(rocket, entity) {
 	GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", vecOrigin);
 	
 	if( g_fUlti_Cooldown[GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity")] > (GetGameTime()+(ULTI_COOLDOWN-ULTI_DURATION)) ) {
-		ExplosionDamage(vecOrigin, 80.0, 250.0, GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"));
+		ExplosionDamage(vecOrigin, 80.0, 250.0, GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"), rocket);
 	}
 	else {
-		ExplosionDamage(vecOrigin, 120.0, 250.0, GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"));
+		ExplosionDamage(vecOrigin, 120.0, 250.0, GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"), rocket);
 	}
 	
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 250, 250);
@@ -439,7 +450,7 @@ public CTF_WEAPON_PIPE_PipeBomb(client) {
 	SetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity", client);
 	SetEntPropFloat(ent, Prop_Send, "m_flElasticity", 0.4);
 	SetEntityMoveType(ent, MOVETYPE_FLYGRAVITY);
-	//SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_NPC);
+//	SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PROJECTILE);
 	
 	vecAngles[0]-=10.0;
 	
@@ -462,17 +473,22 @@ public CTF_WEAPON_PIPE_PipeBomb_TOUCH(rocket, entity) {
 	
 	if( !IsValidClient(entity) ) {
 		
-		new Float:here[3];
-		GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", here);
+		new String:classname[32];
+		GetEdictClassname(entity, classname, sizeof(classname));
 		
-		if( GetVectorDistance(g_vecLastTouch[rocket], here) <= 0.0001 && g_flLastTouch[rocket] <= GetGameTime()+0.25 ) {
+		if( Entity_IsSolid(entity) || StrContains(classname, "ctf_pipe_") == 0 ) {
+			new Float:here[3];
+			GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", here);
 			
-			
-			TeleportEntity(rocket, NULL_VECTOR, NULL_VECTOR, here);
-			SetEntityMoveType(rocket, MOVETYPE_NONE);
+			if( GetVectorDistance(g_vecLastTouch[rocket], here) <= 0.0001 && g_flLastTouch[rocket] <= GetGameTime()+0.25 ) {
+				
+				
+				TeleportEntity(rocket, NULL_VECTOR, NULL_VECTOR, here);
+				SetEntityMoveType(rocket, MOVETYPE_NONE);
+			}
+			g_flLastTouch[rocket] = GetGameTime();
+			GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", g_vecLastTouch[rocket]);
 		}
-		g_flLastTouch[rocket] = GetGameTime();
-		GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", g_vecLastTouch[rocket]);
 		
 		return;
 	}
@@ -514,7 +530,7 @@ stock CTF_WEAPON_PIPE_PipeBomb_EXPL(rocket, all=false) {
 	new Float:vecOrigin[3];
 	GetEntPropVector(rocket, Prop_Send, "m_vecOrigin", vecOrigin);
 	
-	ExplosionDamage(vecOrigin, 150.0, 200.0, GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"));
+	ExplosionDamage(vecOrigin, 150.0, 200.0, GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"), rocket);
 	
 	TE_SetupExplosion(vecOrigin, g_cExplode, 1.0, 0, 0, 200, 200);
 	TE_SendToAll();
@@ -775,6 +791,10 @@ public Action:CTF_WEAPON_FLAME_Reload_Task(Handle:timer, any:client) {
 }
 public CTF_WEAPON_FLAME_Fire(client, shutdown) {
 	
+	if( GetEntProp(client, Prop_Data, "m_nWaterLevel") > 1 ) {
+		return;
+	}
+	
 	if( !shutdown ) {
 		new Float:vecOrigin[3], Float:vecAngles[3], Float:vecVelocity[3];
 		
@@ -783,9 +803,9 @@ public CTF_WEAPON_FLAME_Fire(client, shutdown) {
 		
 		new Float:rad = degrees_to_radians(vecAngles[1]);
 		
-		vecOrigin[0] = (vecOrigin[0] - (0.0 * Sine(rad))   + (80.0 * Cosine(rad)) );
-		vecOrigin[1] = (vecOrigin[1] + (0.0 * Cosine(rad)) + (80.0 * Sine(rad)) );
-		vecOrigin[2] = (vecOrigin[2] - 10.0);
+		vecOrigin[0] = (vecOrigin[0] - (0.0 * Sine(rad))   + (50.0 * Cosine(rad)) );
+		vecOrigin[1] = (vecOrigin[1] + (0.0 * Cosine(rad)) + (50.0 * Sine(rad)) );
+		vecOrigin[2] = (vecOrigin[2] + 5.0);
 		
 		new String:classname[128];
 		Format(classname, sizeof(classname), "ctf_flame_%i", client);
@@ -822,6 +842,7 @@ public CTF_WEAPON_FLAME_Fire(client, shutdown) {
 		SDKHook(ent, SDKHook_Touch, CTF_WEAPON_FLAME_TOUCH);
 		SDKHook(ent, SDKHook_ShouldCollide, ShouldCollide);
 	}
+	return;
 }
 public CTF_WEAPON_FLAME_TOUCH(rocket, entity) {
 	
@@ -829,7 +850,11 @@ public CTF_WEAPON_FLAME_TOUCH(rocket, entity) {
 		return;
 	}
 	
-	IgniteEntity(entity, 5.0);
+	if( GetClientTeam( GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity") ) != GetClientTeam(entity) ) {
+		IgniteEntity(entity, 5.0);
+		g_fBurning[entity] = (GetGameTime() + 5.0);
+		g_iBurning[entity] = GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity");
+	}
 	DealDamage(entity, GetRandomInt(8, 12), GetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity"), DMG_BURN);
 	
 	AcceptEntityInput(rocket, "Kill");

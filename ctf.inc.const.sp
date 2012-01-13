@@ -12,7 +12,7 @@ new String:g_szError[1024];
 // ------------------------------
 // CTF-CONFIG
 //
-#define FLAG_SPEED		500.0
+#define FLAG_SPEED		400.0
 // ------------------------------
 // ULTIMATE-CONFIG
 //
@@ -160,6 +160,8 @@ new g_cShockWave2;
 new g_cSmokeBeam;
 new g_cExplode;
 new g_cScorch;
+new g_cScorch2;
+new g_cGlow;
 // ------------------------------
 // Class: Artificier
 //
