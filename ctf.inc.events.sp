@@ -232,6 +232,8 @@ public Action:EventDeath(Handle:Event, const String:Name[], bool:Broadcast) {
 			SetEventString(ev, "weapon", "ctf_flame");
 			SetEventBool(ev, "headshot", false);
 			FireEvent(ev);
+			if( ev != INVALID_HANDLE )
+				CloseHandle(ev);
 		}
 	}
 	g_iBurning[client] = 0;
@@ -615,9 +617,6 @@ public OnGameFrame() {
 				
 				new owner = GetEntPropEnt(Entity_GetParent(i), Prop_Send, "m_hOwnerEntity");
 				g_flGasLastDamage[client] = (GetGameTime() + 1.0);
-				
-				if( GetClientTeam(owner) == GetClientTeam(client) )
-					continue;
 				
 				DealDamage(client, GetRandomInt(8, 12), owner);
 				

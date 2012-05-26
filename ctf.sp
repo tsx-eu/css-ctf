@@ -349,7 +349,7 @@ public SheduleEntityInput( entity, Float:time, const String:input[]) {
 		return;
 	
 	new Handle:dp;
-	CreateDataTimer( time, ScheduleTargetInput_Task, dp); 
+	CreateDataTimer( time, ScheduleTargetInput_Task, dp, TIMER_DATA_HNDL_CLOSE); 
 	WritePackCell(dp, EntIndexToEntRef(entity));
 	WritePackString(dp, input);
 }
@@ -367,7 +367,7 @@ public ScheduleTargetInput( const String:targetname[], Float:time, const String:
 			continue;
 		
 		new Handle:dp;
-		CreateDataTimer( time, ScheduleTargetInput_Task, dp); 
+		CreateDataTimer( time, ScheduleTargetInput_Task, dp, TIMER_DATA_HNDL_CLOSE); 
 		WritePackCell(dp, EntIndexToEntRef(i));
 		WritePackString(dp, input);
 	}
@@ -733,10 +733,12 @@ stock GetClientAimLocation(client, Float:vecReturn[3]) {
 	
 	new Handle:trace = TR_TraceRayFilterEx(vecSrc, vecAng, MASK_SHOT, RayType_Infinite, FilterToOne, client);
 	if( !TR_DidHit(trace) ) {
+		CloseHandle(trace);
 		return -1;
 	}
 	
 	TR_GetEndPosition(vecReturn, trace);
+	CloseHandle(trace);
 	return 0;
 }
 public bool:FilterToOne(entity, mask, any:data) {

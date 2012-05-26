@@ -628,6 +628,7 @@ public CTF_NADE_NAIL_Shoot(entity) {
 		
 		new Handle:trace = TR_TraceRayFilterEx(vecOrigin, vecAngles, MASK_SHOT, RayType_Infinite, FilterToOne, entity);
 		if( !TR_DidHit(trace) ) {
+			CloseHandle(trace);
 			return;
 		}
 		

@@ -20,6 +20,7 @@ public CTF_CLASS_init(client) {
 		
 		while( ( wepIdx = GetPlayerWeaponSlot( client, i ) ) != -1 ) {
 			RemovePlayerItem( client, wepIdx );
+			RemoveEdict(wepIdx);
 		}
 	}
 	
@@ -158,7 +159,7 @@ public CTF_SCOUT_ulti(client) {
 	CreateTimer(ULTI_DURATION, CTF_SCOUT_ulti_Task, client);
 	
 	new Handle:dp;
-	CreateDataTimer( 0.01, CTF_SCOUT_Energy, dp); 
+	CreateDataTimer( 0.01, CTF_SCOUT_Energy, dp, TIMER_DATA_HNDL_CLOSE); 
 	WritePackCell(dp, client);
 	WritePackCell(dp, 0);
 	
@@ -199,7 +200,7 @@ public Action:CTF_SCOUT_Energy(Handle:timer, Handle:dp1) {
 	if( g_fUlti_Cooldown[client] > (GetGameTime()+(ULTI_COOLDOWN-ULTI_DURATION)) ) {
 		
 		new Handle:dp2;
-		CreateDataTimer( 0.001, CTF_SCOUT_Energy, dp2); 
+		CreateDataTimer( 0.001, CTF_SCOUT_Energy, dp2, TIMER_DATA_HNDL_CLOSE); 
 		WritePackCell(dp2, client);
 		WritePackCell(dp2, from_left);
 	}

@@ -791,7 +791,7 @@ public CTF_TP_ACTION(client) {
 					g_flPlayerSpeed[client] = 0.0;
 					
 					new Handle:dp;
-					CreateDataTimer(0.5, CTF_TP_ACTION_POST, dp);
+					CreateDataTimer(0.5, CTF_TP_ACTION_POST, dp, TIMER_DATA_HNDL_CLOSE);
 					WritePackCell(dp, client);
 					WritePackCell(dp, client2);
 					
