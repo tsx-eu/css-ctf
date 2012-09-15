@@ -94,7 +94,7 @@ public Action:CTF_DUMP_CHECK(Handle:timer, any:zomg) {
 		amount++;
 	}
 	
-	if( amount > 1500 ) {
+	if( amount >= 2000 ) {
 		CTF_DUMP();
 		PrintToServer("[CTF] Le plugin a crashe, merci de prevenir KoSSoLaX` avec l'heure du crash.");
 		LogToGame("[CTF] Le plugin a crashe, merci de prevenir KoSSoLaX` avec l'heure du crash.");

@@ -192,11 +192,9 @@ public CTF_Score(client, Flag_Type, Reverse_Flag_Type) {
 	new String:szSound[128], String:szTeam[8];
 	if( Reverse_Flag_Type == 0 ) {
 		Format(szTeam, sizeof(szTeam), "Red");
-		//CS_TerminateRound(5.0, CSRoundEnd_TerroristWin, true);
 	}
 	else {
 		Format(szTeam, sizeof(szTeam), "Blue");
-		//CS_TerminateRound(5.0, CSRoundEnd_CTWin, true);
 	}
 	
 	Format(szSound, sizeof(szSound), "play \"DeadlyDesire/ctf/");
