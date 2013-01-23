@@ -15,10 +15,31 @@
 // ------------------------------------------------------------------------------------------------------------------
 //		Hooks -	Connexions Call
 //
+public OnThink(client) {
+	
+	if( g_iPlayerClass[client] == class_sniper && IsPlayerAlive(client) ) {
+
+		CTF_SNIPER_dot(client);
+		
+		new WeaponIndex = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+		
+		if( WeaponIndex > 0 ) {
+			new String:WeaponName[64]; GetEdictClassname(WeaponIndex, WeaponName, 63);
+			
+			if( StrEqual(WeaponName, "weapon_awp", false) ) {
+				SetEntPropFloat(WeaponIndex, Prop_Send, "m_fAccuracyPenalty", 0.0);
+				SetEntProp(client, Prop_Send, "m_iShotsFired", 0);
+			}
+		}
+	}
+}
+
 public OnClientPutInServer(client) {
 	SDKHook(client, SDKHook_OnTakeDamage,	OnTakeDamage);
 	SDKHook(client, SDKHook_SetTransmit,	OnSetTransmit);
 	SDKHook(client, SDKHook_Touch, 			CTF_CLIENT_TOUCH);
+	SDKHook(client,	SDKHook_PreThink,		OnThink);
+	SDKHook(client,	SDKHook_PostThink,		OnThink);
 	
 	CTF_Reset_Player(client);
 	
@@ -138,10 +159,10 @@ public Action:EventPlayerTeam(Handle:Event, const String:name[], bool:dontBroadc
 	
 	g_iPlayerClass[client] = class_none;
 	if( team == CS_TEAM_CT ) {
-		PrintToChatAll("[CTF] %N a rejoint l'equipe bleue.", client);
+		CTF_PrintToChat(0, "%N a rejoint l'équipe bleue.", client);
 	}
 	else if( team == CS_TEAM_T ) {
-		PrintToChatAll("[CTF] %N a rejoint l'equipe rouge.", client);
+		CTF_PrintToChat(0, "%N a rejoint l'équipe rouge.", client);
 	}
 	return Plugin_Continue;
 }
@@ -160,6 +181,9 @@ public Action:EventRoundStart(Handle:Event, const String:Name[], bool:Broadcast)
 }
 public Action:EventSpawn(Handle:Event, const String:Name[], bool:Broadcast) {
 	new client = GetClientOfUserId(GetEventInt(Event, "userid"));
+	
+	if( client == 0 )
+		return Plugin_Continue;
 	
 	if( g_iLastTeam[client] != GetClientTeam(client) ) {
 		if( GetClientTeam(client) == CS_TEAM_CT ) {
@@ -181,8 +205,8 @@ public Action:EventSpawn(Handle:Event, const String:Name[], bool:Broadcast) {
 		
 		g_flPlayerSpeed[client] = 0.0;
 		
-		SetEntData(client, FindDataMapOffs(client, "m_iMaxHealth"), 1, 4, true);
-		SetEntityHealth(client, 1);
+		SetEntData(client, FindDataMapOffs(client, "m_iMaxHealth"), 100, 4, true);
+		SetEntityHealth(client, 100);
 		
 		g_iPlayerArmor[client] = 0;
 	}
@@ -245,6 +269,8 @@ public EventBulletImpact(Handle:event,const String:name[],bool:dontBroadcast) {
 	
 	new attacker = GetClientOfUserId(GetEventInt(event, "userid"));
 	
+	SetEntProp(attacker, Prop_Send, "m_iShotsFired", 0);
+	
 	new Float:bulletDestination[3];
 	bulletDestination[0] = GetEventFloat( event, "x" );
 	bulletDestination[1] = GetEventFloat( event, "y" );
@@ -256,25 +282,22 @@ public EventBulletImpact(Handle:event,const String:name[],bool:dontBroadcast) {
 		
 		if( StrEqual(WeaponName, "weapon_awp", false) ) {
 			
-			new Float:bulletOrigin[3];
-			SDKCall( g_hPosition, attacker, bulletOrigin );
+			new Float:vecOrigin[3], Float:vecAngles[3];
+		
+			GetClientEyePosition(attacker, vecOrigin);
+			GetClientEyeAngles(attacker, vecAngles);
 			
+			new Float:rad = degrees_to_radians(vecAngles[1]);
 			
-			
-			new Float:distance = GetVectorDistance( bulletOrigin, bulletDestination );
-			
-			new Float:percentage = 0.4 / ( distance / 100 );
-			
-			new Float:newBulletOrigin[3];
-			newBulletOrigin[0] = bulletOrigin[0] + ( ( bulletDestination[0] - bulletOrigin[0] ) * percentage );
-			newBulletOrigin[1] = bulletOrigin[1] + ( ( bulletDestination[1] - bulletOrigin[1] ) * percentage ) - 0.08;
-			newBulletOrigin[2] = bulletOrigin[2] + ( ( bulletDestination[2] - bulletOrigin[2] ) * percentage );
+			vecOrigin[0] = (vecOrigin[0] - (-10.0 * Sine(rad))   + (50.0 * Cosine(rad)) );
+			vecOrigin[1] = (vecOrigin[1] + (-10.0 * Cosine(rad)) + (50.0 * Sine(rad)) );
+			vecOrigin[2] = (vecOrigin[2] - 10.0);
 			
 			if( GetClientTeam( attacker ) == CS_TEAM_T ) {
-				TE_SetupBeamPoints( newBulletOrigin, bulletDestination, g_cPhysicBeam, 0, 0, 0, 0.5, 3.0, 3.0, 1, 0.0, {250, 0, 0, 120}, 0);
+				TE_SetupBeamPoints( vecOrigin, bulletDestination, g_cPhysicBeam, 0, 0, 0, 0.5, 3.0, 3.0, 1, 0.0, {250, 0, 0, 120}, 0);
 			}
 			else {
-				TE_SetupBeamPoints( newBulletOrigin, bulletDestination, g_cPhysicBeam, 0, 0, 0, 0.5, 3.0, 3.0, 1, 0.0, {0, 0, 250, 120}, 0);
+				TE_SetupBeamPoints( vecOrigin, bulletDestination, g_cPhysicBeam, 0, 0, 0, 0.5, 3.0, 3.0, 1, 0.0, {0, 0, 250, 120}, 0);
 			}
 			TE_SendToAll();
 		}
@@ -313,11 +336,17 @@ public EventBulletImpact(Handle:event,const String:name[],bool:dontBroadcast) {
 //
 public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype) {
 	
-	//PrintToChat(victim, "Attacker: %i - inflictor: %i (%i)", attacker, inflictor, (attacker-GetMaxClients()));
+	new bool:changed = false;
 	
 	new String:classname[128], String:targetname[128];
 	GetEdictClassname(inflictor, classname, 127);
 	GetEntPropString(inflictor, Prop_Data, "m_iName", targetname, sizeof(targetname));
+	
+	if( StrEqual(classname, "entityflame") ) {
+		changed = true;
+		attacker = g_iBurning[victim];
+		damage = GetRandomFloat(1.5, 3.0);
+	}
 	
 	if( StrEqual(classname, "trigger_hurt") ) {
 		
@@ -358,14 +387,14 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 			}
 		}
 		
-		if( g_flBuildHealth[victim][build_type] >= 200 && (g_flBuildHealth[victim][build_type]-damage) < 200 ) {
+		if( g_flBuildHealth[victim][build_type] >= 200.0 && (g_flBuildHealth[victim][build_type]-damage) < 200.0 ) {
 			
 			new ent = AttachParticle(victim, "smoke_gib_01", -1.0);
 			
 			vecPos[2] += 50.0;
 			TeleportEntity(ent, vecPos, NULL_VECTOR, NULL_VECTOR);
 		}
-		if(g_flBuildHealth[victim][build_type] >= 100 && (g_flBuildHealth[victim][build_type]-damage) < 100 ) {
+		if(g_flBuildHealth[victim][build_type] >= 100.0 && (g_flBuildHealth[victim][build_type]-damage) < 100.0 ) {
 			
 			new ent = AttachParticle(victim, "burning_gib_01", -1.0);
 			
@@ -375,7 +404,7 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		
 		g_flBuildHealth[victim][build_type] -= damage;
 		
-		if( g_flBuildHealth[victim][build_type] <= 0 ) {
+		if( g_flBuildHealth[victim][build_type] <= 0.0 ) {
 			
 			new Float:vecAngl[3]; vecAngl[0] = 90.0;
 			
@@ -394,7 +423,6 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		}
 		return Plugin_Handled;
 	}
-	new bool:changed = false;
 	
 	if( attacker == 0 && inflictor == 0 && damagetype == DMG_FALL) {
 		damage *= 0.25;
@@ -406,6 +434,7 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		switch( g_iPlayerClass[attacker] ) {
 			case class_scout: {
 				damage *= 0.15;
+				damagetype = DMG_PREVENT_PHYSICS_FORCE;
 			}
 			case class_sniper: {
 				if( inflictor == attacker ) {
@@ -531,7 +560,6 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 			}
 		}
 	}
-	
 	if( changed )
 		return Plugin_Changed;
 	
@@ -697,7 +725,16 @@ public OnGameFrame() {
 						
 						CreateTimer( ((40.0) + (0.01)), SecuIsActivited, Flag_Type);
 						
-						PrintToChatAll("[CTF] La securite rouge a ete desactivee!");
+						CTF_PrintToChat(CTF_PRINT_RED, "Votre sécurité a été désactivée par l'ennemi.");
+						CTF_PrintToChat(CTF_PRINT_BLU, "Votre équipe a désactivé la sécurité de l'ennemi.");
+						
+						for(new i=1; i<=GetMaxClients(); i++) {
+							if( !IsValidClient(i) )
+								continue;
+							
+							ClientCommand(i, "play \"DeadlyDesire/ctf/flagdrop.wav\"");
+						}
+						
 						break;
 					}
 					if( Flag_Type == _:flag_blue && GetClientTeam(client) == CS_TEAM_T ) {
@@ -722,7 +759,15 @@ public OnGameFrame() {
 						
 						CreateTimer( ((40.0) + (0.01)), SecuIsActivited, Flag_Type);
 						
-						PrintToChatAll("[CTF] La securite blue a ete desactivee!");
+						CTF_PrintToChat(CTF_PRINT_BLU, "Votre sécurité a été désactivée par l'ennemi.");
+						CTF_PrintToChat(CTF_PRINT_RED, "Votre équipe a désactivé la sécurité de l'ennemi.");
+						
+						for(new i=1; i<=GetMaxClients(); i++) {
+							if( !IsValidClient(i) )
+								continue;
+							
+							ClientCommand(i, "play \"DeadlyDesire/ctf/flagdrop.wav\"");
+						}
 						break;
 					}
 				}
@@ -732,9 +777,17 @@ public OnGameFrame() {
 		if( g_iPlayerClass[client] == class_sniper ) {
 			
 			CTF_SNIPER_dot(client);
+			
+			new WeaponIndex = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+			new String:WeaponName[64]; GetEdictClassname(WeaponIndex, WeaponName, 63);
+			
+			if( StrEqual(WeaponName, "weapon_awp", false) ) {
+				SetEntPropFloat(WeaponIndex, Prop_Send, "m_fAccuracyPenalty", 0.0);
+			}
+			
 			if( g_fUlti_Cooldown[client] > (GetGameTime()+(ULTI_COOLDOWN-ULTI_DURATION)) ) {
-				new WeaponIndex = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
-				new String:WeaponName[64]; GetEdictClassname(WeaponIndex, WeaponName, 63);
+				
+				
 				
 				if( StrEqual(WeaponName, "weapon_awp", false) ) {
 					new Float:NextAttackTime = GetEntPropFloat(WeaponIndex, Prop_Send, "m_flNextPrimaryAttack");
@@ -796,10 +849,10 @@ public OnGameFrame() {
 				GetClientAbsOrigin(target, fvecOrigin2);
 				
 				if( GetVectorDistance(fvecOrigin, fvecOrigin2) >= HEAL_DIST || !IsPlayerAlive(target) ) {
-					CTF_WEAPON_MEDIC_link(client, 0);
+					CTF_WEAPON_MEDIC_link(client, 0, false);
 				}
 				else if( g_fCustomWeapon_NextShoot[client][0] <= (GetGameTime()-0.21) ) {
-					CTF_WEAPON_MEDIC_link(client, 0);
+					CTF_WEAPON_MEDIC_link(client, 0, false);
 				}
 			}
 		}
@@ -1029,6 +1082,11 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 // ------------------------------------------------------------------------------------------------------------------
 //		Hooks - Map Call
 //
+public AddFileToDownloadsTable2(String:file[1024]) {
+	AddFileToDownloadsTable(file);
+	ReplaceString(file, sizeof(file), "sound/", "", false);
+	PrecacheSound(file);
+}
 public OnMapStart() {
 	
 	CTF_Reset_Global();
@@ -1055,32 +1113,37 @@ public OnMapStart() {
 	AddFileToDownloadsTable("materials/DeadlyDesire/ctf/tfcflag_red.vmt");
 	AddFileToDownloadsTable("materials/DeadlyDesire/ctf/tfcflag_red.vtf");
 	
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/RedTeamIncreasesTheirLead.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/HumiliatingDefeat.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueFlagTaken.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/RedTeamWinsTheMatch.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/RedFlagDropped.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/YouHaveWonTheMatch.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/FlawlessVictory.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/YouHaveLostTheMatch.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueTeamDominating.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/RedFlagTaken.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/YouHaveTheFlag.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/TheEnemyHasYourFlag.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueTeamIncreasesTheirLead.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueTeamWinsTheMatch.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueTeamScores.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/FinalRound.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/YouAreOnRed.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/YouAreOnBlue.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueTeamWinsTheRound.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/RedTeamWinsTheRound.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/RedTeamTakesTheLead.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueTeamTakesTheLead.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/RedTeamScores.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/RedFlagReturned.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueFlagReturned.mp3");
-	AddFileToDownloadsTable("sound/DeadlyDesire/ctf/BlueFlagDropped.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/RedTeamIncreasesTheirLead.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/HumiliatingDefeat.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueFlagTaken.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/RedTeamWinsTheMatch.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/RedFlagDropped.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/YouHaveWonTheMatch.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/FlawlessVictory.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/YouHaveLostTheMatch.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueTeamDominating.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/RedFlagTaken.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/YouHaveTheFlag.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/TheEnemyHasYourFlag.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueTeamIncreasesTheirLead.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueTeamWinsTheMatch.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueTeamScores.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/FinalRound.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/YouAreOnRed.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/YouAreOnBlue.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueTeamWinsTheRound.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/RedTeamWinsTheRound.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/RedTeamTakesTheLead.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueTeamTakesTheLead.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/RedTeamScores.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/RedFlagReturned.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueFlagReturned.mp3");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/BlueFlagDropped.mp3");
+	
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/flagdrop.wav");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/flagreturn.wav");
+	AddFileToDownloadsTable2("sound/DeadlyDesire/ctf/flagstolen.wav");
+	
 	
 	AddFileToDownloadsTable("materials/models/weapons/w_rocketlauncher/w_rocketlauncher01_normal.vtf");
 	AddFileToDownloadsTable("materials/models/weapons/w_rocketlauncher/w_rocketlauncher01.vmt");

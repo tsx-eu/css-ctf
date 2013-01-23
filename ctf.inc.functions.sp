@@ -199,20 +199,20 @@ public CTF_Score(client, Flag_Type, Reverse_Flag_Type) {
 	
 	Format(szSound, sizeof(szSound), "play \"DeadlyDesire/ctf/");
 	
-	PrintToChatAll("[CTF] %N capture le drapeau.", client);
-	PrintToChatAll("[CTF] Scores: %i - %i", g_iScore[0], g_iScore[1]);
+	CTF_PrintToChat(0, "%N capture le drapeau.", client);
+	CTF_PrintToChat(0, "Scores: %i - %i", g_iScore[0], g_iScore[1]);
 	
 	SetClientFrags(client, (GetClientFrags(client)+10) );
 	SetTeamScore( GetClientTeam(client), g_iScore[Reverse_Flag_Type]);
 	// Si une �quipe remporte la victoire:
 	// --------------
 	/*
-	if( g_iScore[Flag_Type] == 0 && g_iScore[Reverse_Flag_Type] == 3 ) {
+	if( g_iScore[Flag_Type] == 0 && g_iScore[Reverse_Flag_Type] == 10 ) {
 		for(new i=1; i<=GetMaxClients(); i++) {
 			if( !IsValidClient(i) ) 
 				continue;
 			
-			if( (GetClientTeam(i) == CS_TEAM_CT && g_iScore[0] == 3) || (GetClientTeam(i) == CS_TEAM_T && g_iScore[1] == 3) ) {
+			if( (GetClientTeam(i) == CS_TEAM_CT && g_iScore[0] == 10) || (GetClientTeam(i) == CS_TEAM_T && g_iScore[1] == 10) ) {
 				ClientCommand(i, "play \"DeadlyDesire/ctf/HumiliatingDefeat.mp3\"");
 			}
 			else {
@@ -224,7 +224,7 @@ public CTF_Score(client, Flag_Type, Reverse_Flag_Type) {
 		
 		return;
 	}
-	if( g_iScore[Reverse_Flag_Type] == 3 ) {
+	if( g_iScore[Reverse_Flag_Type] == 10 ) {
 		Format(szSound, sizeof(szSound), "%s%sTeamWinsTheMatch.mp3\"", szSound, szTeam);
 		for(new i=1; i<=GetMaxClients(); i++) {
 			if( !IsValidClient(i) ) 
@@ -311,7 +311,25 @@ public CTF_FlagTouched(toucher, flag, Flag_Type) {
 				ClientCommand(i, "play \"DeadlyDesire/ctf/RedFlagTaken.mp3\"");
 			}
 		}
+		
+		if( GetClientTeam(i) == CS_TEAM_CT ) {
+			if( Flag_Type == 1 ) {
+				CTF_PrintToChat(i, "L'équipe ennemie a récupéré votre drapeau!");
+			}
+			else if( Flag_Type == 0 ) {
+				CTF_PrintToChat(i, "Votre équipe à le drapeau ennemi!");
+			}
+		}
+		else if( GetClientTeam(i) == CS_TEAM_T ) {
+			if( Flag_Type == 1 ) {
+				CTF_PrintToChat(i, "Votre équipe à le drapeau ennemi!");
+			}
+			else if( Flag_Type == 0 ) {
+				CTF_PrintToChat(i, "L'équipe ennemie a récupéré votre drapeau!");
+			}
+		}
 	}
+	
 }
 // ------------------------------------------------------------------------------------------------------------------
 //	Correction de la physic du drapeau

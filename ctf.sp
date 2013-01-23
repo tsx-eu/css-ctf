@@ -11,6 +11,7 @@
 #include <cstrike>
 #include <phun>
 #include <smlib>
+#include <morecolors>
 //#include <tentdev>
 
 public Plugin:myinfo = {
@@ -51,9 +52,9 @@ public OnPluginStart() {
 	g_hClassRestriction[1] 	= CreateConVar("ctf_cr_scout",		"-1", "Class restriction: scout");
 	g_hClassRestriction[2]	= CreateConVar("ctf_cr_sniper",		"2", "Class restriction: sniper");
 	g_hClassRestriction[3]	= CreateConVar("ctf_cr_soldier",	"-1", "Class restriction: soldier");
-	g_hClassRestriction[4]	= CreateConVar("ctf_cr_demoman",	"2", "Class restriction: demoman");
+	g_hClassRestriction[4]	= CreateConVar("ctf_cr_demoman",	"1", "Class restriction: demoman");
 	g_hClassRestriction[5]	= CreateConVar("ctf_cr_medic",		"-1", "Class restriction: medic");
-	g_hClassRestriction[6]	= CreateConVar("ctf_cr_hwguy",		"2", "Class restriction: hwguy");
+	g_hClassRestriction[6]	= CreateConVar("ctf_cr_hwguy",		"1", "Class restriction: hwguy");
 	g_hClassRestriction[7]	= CreateConVar("ctf_cr_pyro",		"1", "Class restriction: pyro");
 	g_hClassRestriction[8]	= CreateConVar("ctf_cr_spy",		"2", "Class restriction: spy");
 	g_hClassRestriction[9]	= CreateConVar("ctf_cr_engineer",	"1", "Class restriction: engineer");
@@ -63,7 +64,7 @@ public OnPluginStart() {
 	HookEvent("round_start", 	EventRoundStart, 	EventHookMode_Post);
 	HookEvent("player_spawn", 	EventSpawn, 		EventHookMode_Post);
 	HookEvent("player_death", 	EventDeath, 		EventHookMode_Pre);
-	HookEvent("bullet_impact", 	EventBulletImpact);
+	HookEvent("bullet_impact", 	EventBulletImpact,	EventHookMode_Pre);
 	HookEvent("player_team", 	EventPlayerTeam,	EventHookMode_Pre);
 	
 	CreateTimer(1.0, HudDataTask, 0, TIMER_REPEAT);
@@ -72,20 +73,12 @@ public OnPluginStart() {
 	g_iOffset_WeaponParent 	= FindSendPropOffs("CBaseCombatWeapon", "m_hOwnerEntity");
 	g_iOffset_money 		= FindSendPropOffs("CCSPlayer", 		"m_iAccount");
 	
-	g_hConfig = LoadGameConfigFile("phun");
-	
-	StartPrepSDKCall(SDKCall_Player);
-	PrepSDKCall_SetFromConf(g_hConfig, SDKConf_Virtual, "Weapon_ShootPosition");
-	PrepSDKCall_SetReturnInfo(SDKType_Vector, SDKPass_ByValue);
-	g_hPosition = EndPrepSDKCall();
-	
-	AddNormalSoundHook(NormalSHook:sound_hook);
-	
-	CreateTimer(1.0, CTF_DUMP_CHECK, _, TIMER_REPEAT);
+	CreateTimer(0.25, CTF_DUMP_CHECK, _, TIMER_REPEAT);
 }
 public Action:CTF_DUMP_CHECK(Handle:timer, any:zomg) {
-	new amount = 0;
-	for(new i=GetMaxClients(); i<2049; i++) {
+	
+	new amount=0;
+	for(new i=0; i<=2048; i++) {
 		if( !IsValidEdict(i) )
 			continue;
 		if( !IsValidEntity(i) )
@@ -93,30 +86,153 @@ public Action:CTF_DUMP_CHECK(Handle:timer, any:zomg) {
 		
 		amount++;
 	}
-	
-	if( amount >= 2000 ) {
-		CTF_DUMP();
-		PrintToServer("[CTF] Le plugin a crashe, merci de prevenir KoSSoLaX` avec l'heure du crash.");
-		LogToGame("[CTF] Le plugin a crashe, merci de prevenir KoSSoLaX` avec l'heure du crash.");
-		ServerCommand("sm plugins unload ctf");
-	}
+	if( amount > 1900 )
+		RunMapCleaner();
+	if( amount > 2000 )
+		RunMapCleaner(true);
 }
-public CTF_DUMP() {
-	for(new i=GetMaxClients(); i<2049; i++) {
+stock RunMapCleaner(full = false) {
+	
+	new amount = 0;
+	new const max = 50;
+	
+	if( amount <= max || full ) {
+		amount += CleanUp(false);
+	}
+	
+	if( amount <= max || full ) {
+		amount += CleanUp(true);
+	}
+	
+	if( amount <= max || full ) {
+		
+		for (new i=GetMaxClients();i<=GetMaxEntities();i++) {
+			if( !IsValidEdict(i) )
+				continue;
+			if( !IsValidEntity(i) )
+				continue;
+			
+			new String:classname[64];
+			GetEdictClassname(i, classname, sizeof(classname));
+			if( StrEqual(classname, "prop_dynamic") ||  StrEqual(classname, "prop_physics") ) {
+				if( Entity_GetParent(i) <= 0 ) {
+					AcceptEntityInput(i, "Kill");
+					amount++;
+				}
+			}
+			
+			if( !full && amount >= max )
+				break;
+		}
+		
+	}
+	
+	if( amount <= max || full ) {
+		
+		for (new i=GetMaxClients();i<=GetMaxEntities();i++) {
+			if( !IsValidEdict(i) )
+				continue;
+			if( !IsValidEntity(i) )
+				continue;
+			
+			new String:classname[64];
+			GetEdictClassname(i, classname, sizeof(classname));
+			if( StrContains(classname, "rp_block") == 0 ) {
+				AcceptEntityInput(i, "Kill");
+				amount++;
+			}
+			
+			if( !full && amount >= max )
+				break;
+		}
+		
+	}
+	
+	if( amount <= max || full ) {
+		
+		for (new i=GetMaxClients();i<=GetMaxEntities();i++) {
+			if( !IsValidEdict(i) )
+				continue;
+			if( !IsValidEntity(i) )
+				continue;
+			
+			new String:classname[64];
+			GetEdictClassname(i, classname, sizeof(classname));
+			if( StrContains(classname, "bonbon_entity") == 0 ) {
+				AcceptEntityInput(i, "Kill");
+				amount++;
+			}
+			
+			if( !full && amount >= max )
+				break;
+		}
+		
+	}
+	
+	if( amount <= 0 ) {
+		
+		for (new i=GetMaxClients();i<=GetMaxEntities();i++) {
+			if( !IsValidEdict(i) )
+				continue;
+			if( !IsValidEntity(i) )
+				continue;
+			
+			new String:classname[64];
+			GetEdictClassname(i, classname, sizeof(classname));
+			if( StrContains(classname, "rp_mine") == 0 || StrContains(classname, "rp_plant") == 0 || StrContains(classname, "rp_cash") == 0 ) {
+				AcceptEntityInput(i, "Kill");
+				amount++;
+			}
+			
+			if( !full && amount >= max )
+				break;
+		}
+		
+	}
+	
+	if( amount <= 0 || full ) {
+		
+		for (new i=GetMaxClients();i<=GetMaxEntities();i++) {
+			if( !IsValidEdict(i) )
+				continue;
+			if( !IsValidEntity(i) )
+				continue;
+			
+			new String:classname[64];
+			GetEdictClassname(i, classname, sizeof(classname));
+			if( StrContains(classname, "spotlight_end") == 0 || StrContains(classname, "beam") == 0 ) {
+				AcceptEntityInput(i, "Kill");
+				amount++;
+			}
+		}
+		
+	}
+	
+	LogToGame("[CSS-RP] [DEBUG] %i prop ont ete supprime.", amount);
+}
+stock CleanUp(force = false) {
+	new amount = 0;
+	
+	for (new i=GetMaxClients();i<=GetMaxEntities();i++) {
 		if( !IsValidEdict(i) )
 			continue;
 		if( !IsValidEntity(i) )
 			continue;
 		
-		new String:classname[128];
-		GetEdictClassname(i, classname, sizeof(classname));
+		decl String:name[64];
+		GetEdictClassname(i, name, sizeof(name));
 		
-		if( StrContains(classname, "prop_", false) == 0 )
+		// By Kigen (c) 2008 - Please give me credit. :)
+		if( StrContains(name, "weapon_") == -1 && StrContains(name, "item_") == - 1)
+			continue;
+		if( GetEntDataEnt2(i, g_iOffset_WeaponParent) > 0 )
 			continue;
 		
-		Format(classname, sizeof(classname), "[DUMP] %i:%s", i, classname);
-		LogToFile("ctf_fail.log", classname);
+		AcceptEntityInput(i, "Kill");
+		amount++;
 	}
+	
+	return amount;
 }
 public Action:OnGetGameDescription(String:gameDesc[64]) {
 	Format(gameDesc, sizeof(gameDesc), "CSS-CTF");
@@ -301,7 +417,7 @@ public Action:CmdBackPack_id(client, args) {
 	}
 	if( id >= 0 ) {
 		
-		PrintToChat(client, "id:%i", id);
+		CTF_PrintToChat(client, "id:%i", id);
 	}
 	
 	return Plugin_Handled;
@@ -334,13 +450,63 @@ public Action:SecuIsActivited(Handle:timer, any:zomg) {
 	g_iSecu_Status[zomg] = 0;
 	
 	if( zomg == _:flag_blue ) {
-		PrintToChatAll("[CTF] La securite blue a ete activee!");
+		
+		CTF_PrintToChat(CTF_PRINT_RED, "La sécurité de l'ennemi a été réactivée.");
+		CTF_PrintToChat(CTF_PRINT_BLU, "Votre sécurité a été réactivée.");
 	}
 	else {
-		PrintToChatAll("[CTF] La securite rouge a ete activee!");
+		
+		CTF_PrintToChat(CTF_PRINT_BLU, "La sécurité de l'ennemi a été réactivée.");
+		CTF_PrintToChat(CTF_PRINT_RED, "Votre sécurité a été réactivée.");
+	}
+	
+	for(new i=1; i<=GetMaxClients(); i++) {
+		if( !IsValidClient(i) )
+			continue;
+		
+		ClientCommand(i, "play \"DeadlyDesire/ctf/flagreturn.wav\"");
 	}
 }
-
+public CTF_PrintToChat(client, const String:buffer[], any:...) {
+	
+	new String:message[MAX_MESSAGE_LENGTH+255];
+	
+	VFormat(message, sizeof(message), buffer, 3);
+	
+	ReplaceString(message, sizeof(message), "bleue","{blue}bleue{default}", false);
+	ReplaceString(message, sizeof(message), "bleu",	"{blue}bleu{default}", false);
+	ReplaceString(message, sizeof(message), "{blue}{blue}bleu{default}e{default}",	"{blue}bleue{default}", false);
+	
+	ReplaceString(message, sizeof(message), "rouge", "{red}rouge{default}", false);
+	
+	
+	
+	if( client == CTF_PRINT_ALL ) {
+		CPrintToChatAll("{lemonchiffon}[CSS-CTF]{default} %s", message);
+	}
+	else if( client == CTF_PRINT_BLU ) {
+		
+		for(new i=1; i<=GetMaxClients(); i++) {
+			if( !IsValidClient(i) )
+				continue;
+			if( GetClientTeam(i) == CS_TEAM_CT ) {
+				CPrintToChatEx(i, i, "{teamcolor}[CSS-CTF]{default} %s", message);
+			}
+		}
+	}
+	else if( client == CTF_PRINT_RED ) {
+		for(new i=1; i<=GetMaxClients(); i++) {
+			if( !IsValidClient(i) )
+				continue;
+			if( GetClientTeam(i) == CS_TEAM_T ) {
+				CPrintToChatEx(i, i, "{teamcolor}[CSS-CTF]{default} %s", message);
+			}
+		}
+	}
+	else {
+		CPrintToChatEx(client, client, "{teamcolor}[CSS-CTF]{default} %s", message);
+	}
+}
 public SheduleEntityInput( entity, Float:time, const String:input[]) {
 	
 	if( !IsValidEdict(entity) )
@@ -452,32 +618,32 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 		
 		if( g_bSecurity ) {
 			
-			Format(szHUD, sizeof(szHUD), "%s Securite:", szHUD);
+			Format(szHUD, sizeof(szHUD), "%s Sécurités:", szHUD);
 			
 			if( GetClientTeam(i) == CS_TEAM_CT ) {
 				
 				if( g_iSecu_Status[flag_blue] )
-					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Desactivee", szHUD);
+					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Désactivée", szHUD);
 				else
-					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Activee", szHUD);
+					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Activée", szHUD);
 				
 				if( g_iSecu_Status[flag_red] )
-					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Desactivee", szHUD);
+					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Désactivée", szHUD);
 				else
-					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Activee", szHUD);
+					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Activée", szHUD);
 				
 			}
 			else {
 				
 				if( g_iSecu_Status[flag_red] )
-					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Desactivee", szHUD);
+					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Désactivée", szHUD);
 				else
-					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Activee", szHUD);
+					Format(szHUD, sizeof(szHUD), "%s\n - Rouge: Activée", szHUD);
 				
 				if( g_iSecu_Status[flag_blue] )
-					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Desactivee", szHUD);
+					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Désactivée", szHUD);
 				else
-					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Activee", szHUD);
+					Format(szHUD, sizeof(szHUD), "%s\n - Bleue: Activée", szHUD);
 					
 			}
 			
@@ -498,7 +664,7 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 			if( g_flMetal[i] > 200.0 ) {
 				g_flMetal[i] = 200.0;
 			}
-			Format(szHUD, sizeof(szHUD), "%s\nMetal: %i \n\nConstruction:", szHUD, RoundFloat(g_flMetal[i]));
+			Format(szHUD, sizeof(szHUD), "%s\nMétal: %i \n\nConstruction:", szHUD, RoundFloat(g_flMetal[i]));
 			
 			if( IsValidSentry( g_iBuild[i][build_sentry]) && g_flBuildHealth[ g_iBuild[i][build_sentry] ][build_sentry] > 0.0 ) {
 				Format(szHUD, sizeof(szHUD), "%s\n  - Tourelle: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_sentry] ][build_sentry] );
@@ -508,16 +674,16 @@ public Action:HudDataTask(Handle:timer, any:zomg) {
 			}
 			
 			if( IsValidTeleporter( g_iBuild[i][build_teleporter_in]) && g_flBuildHealth[ g_iBuild[i][build_teleporter_in] ][build_teleporter_in] > 0.0 ) {
-				Format(szHUD, sizeof(szHUD), "%s\n  - Teleporteur E.: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_teleporter_in] ][build_teleporter_in] );
+				Format(szHUD, sizeof(szHUD), "%s\n  - Téléporteur E.: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_teleporter_in] ][build_teleporter_in] );
 			}
 			else {
-				Format(szHUD, sizeof(szHUD), "%s\n  - Teleporteur E.: H/S", szHUD);
+				Format(szHUD, sizeof(szHUD), "%s\n  - Téléporteur E.: H/S", szHUD);
 			}
 			if( IsValidTeleporter( g_iBuild[i][build_teleporter_out]) && g_flBuildHealth[ g_iBuild[i][build_teleporter_out] ][build_teleporter_out] > 0.0 ) {
-				Format(szHUD, sizeof(szHUD), "%s\n  - Teleporteur S.: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_teleporter_out] ][build_teleporter_out] );
+				Format(szHUD, sizeof(szHUD), "%s\n  - Téléporteur S.: %.1f HP", szHUD, g_flBuildHealth[ g_iBuild[i][build_teleporter_out] ][build_teleporter_out] );
 			}
 			else {
-				Format(szHUD, sizeof(szHUD), "%s\n  - Teleporteur S.: H/S", szHUD);
+				Format(szHUD, sizeof(szHUD), "%s\n  - Téléporteur S.: H/S", szHUD);
 			}
 		}
 		
@@ -743,17 +909,6 @@ stock GetClientAimLocation(client, Float:vecReturn[3]) {
 }
 public bool:FilterToOne(entity, mask, any:data) {
 	return (data != entity);
-}
-public CleanUp() {  
-	new String:name[64];
-	for (new i=GetMaxClients();i<=GetMaxEntities();i++) {
-		if ( IsValidEdict(i) && IsValidEntity(i) ) {
-			GetEdictClassname(i, name, sizeof(name));
-			if ( ( StrContains(name, "weapon_") != -1 || StrContains(name, "item_") != -1 ) && GetEntDataEnt2(i, g_iOffset_WeaponParent) == -1 ) {
-				RemoveEdict(i);
-			}
-		}
-	}
 }
 stock Float:degrees_to_radians(Float:degreesGiven) {
 	return degreesGiven*(PI/180.0);

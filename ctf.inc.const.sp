@@ -31,6 +31,10 @@ new String:g_szError[1024];
 #define SENTRY_PRECI	(0.998)
 #define MAX_BAGPACK		250
 
+#define	CTF_PRINT_ALL	0
+#define	CTF_PRINT_RED	-1
+#define CTF_PRINT_BLU	-2
+
 #define FFADE_IN            0x0001        // Just here so we don't pass 0 into the function
 #define FFADE_OUT           0x0002        // Fade out (not in)
 #define FFADE_MODULATE      0x0004        // Modulate (don't blend)
@@ -146,11 +150,6 @@ new Float:g_fCustomWeapon_NextShoot[65][3];
 new g_iOffset_armor = -1;
 new g_iOffset_WeaponParent = -1;
 new g_iOffset_money = -1;
-// ------------------------------
-// SDK-CALL HANDLE
-//
-new Handle:g_hConfig = INVALID_HANDLE;
-new Handle:g_hPosition = INVALID_HANDLE;
 // ------------------------------
 // PRECACHE
 //

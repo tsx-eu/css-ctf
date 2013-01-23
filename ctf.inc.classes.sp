@@ -93,7 +93,8 @@ public CTF_CLASS_init(client) {
 }
 public CTF_Ultimate(client) {
 	if( g_fUlti_Cooldown[client] > GetGameTime() ) {
-		PrintToChat(client, "[CTF] Vous ne pouvez pas utiliser votre ultimate pour encore %.2f secondes", (g_fUlti_Cooldown[client]-GetGameTime()));
+		CTF_PrintToChat(client, "[CTF] Vous ne pouvez pas utiliser votre ultimate pour encore %.2f secondes", (g_fUlti_Cooldown[client]-GetGameTime()));
+		
 		return;
 	}
 	if( !IsPlayerAlive(client) ) {
@@ -150,7 +151,7 @@ public CTF_SCOUT_init(client) {
 	GivePlayerItem(client, "weapon_mac10");
 }
 public CTF_SCOUT_ulti(client) {
-	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	CTF_PrintToChat(client, "Vous avez utilise votre ultimate!");
 	
 	g_flPlayerSpeed[client] = 550.0;
 	
@@ -212,7 +213,7 @@ public Action:CTF_SCOUT_ulti_Task(Handle:timer, any:client) {
 	
 	if( g_iPlayerClass[client] == class_scout ) {
 		g_flPlayerSpeed[client] = 400.0;
-		PrintToChat(client, "Votre ultimate a pris fin!");
+		CTF_PrintToChat(client, "Votre ultimate a pris fin!");
 	}
 	
 	return Plugin_Handled;
@@ -235,7 +236,7 @@ public CTF_SNIPER_init(client) {
 }
 public CTF_SNIPER_ulti(client) {
 	
-	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	CTF_PrintToChat(client, "Vous avez utilise votre ultimate!");
 	
 	g_fUlti_Cooldown[client] = (GetGameTime() + ULTI_COOLDOWN);
 	
@@ -243,7 +244,7 @@ public CTF_SNIPER_ulti(client) {
 }
 public Action:CTF_SNIPER_ulti_Task(Handle:timer, any:client) {
 	
-	PrintToChat(client, "Votre ultimate a pris fin!");
+	CTF_PrintToChat(client, "Votre ultimate a pris fin!");
 	
 }
 // ------------------------------------------------------------------------------------------------------------------
@@ -268,7 +269,7 @@ public CTF_SOLDIER_init(client) {
 }
 public CTF_SOLDIER_ulti(client) {
 	
-	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	CTF_PrintToChat(client, "Vous avez utilise votre ultimate!");
 	
 	g_fUlti_Cooldown[client] = (GetGameTime() + ULTI_COOLDOWN);
 	
@@ -276,7 +277,7 @@ public CTF_SOLDIER_ulti(client) {
 }
 public Action:CTF_SOLDIER_ulti_Task(Handle:timer, any:client) {
 	
-	PrintToChat(client, "Votre ultimate a pris fin!");
+	CTF_PrintToChat(client, "Votre ultimate a pris fin!");
 	
 }
 // ------------------------------------------------------------------------------------------------------------------
@@ -301,7 +302,7 @@ public CTF_DEMOMAN_init(client) {
 }
 public CTF_DEMOMAN_ulti(client) {
 	
-	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	CTF_PrintToChat(client, "Vous avez utilise votre ultimate!");
 	
 	new Float:vecOrigin[3];
 	GetClientAbsOrigin(client, vecOrigin);
@@ -327,12 +328,12 @@ public CTF_MEDIC_init(client) {
 	GivePlayerItem(client, "weapon_p228");
 	GivePlayerItem(client, CUSTOM_WEAPON);
 	
-	g_iCustomWeapon_Ammo[client][0] = 1;
-	g_iCustomWeapon_Ammo[client][1] = 0;
+	g_iCustomWeapon_Ammo[client][0] = 100;
+	g_iCustomWeapon_Ammo[client][1] = 5;
 }
 public CTF_MEDIC_ulti(client) {
 	
-	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	CTF_PrintToChat(client, "Vous avez utilise votre ultimate!");
 	CTF_MEDIC_CONTA(client);
 }
 public CTF_MEDIC_CONTA(client) {
@@ -377,14 +378,7 @@ public CTF_MEDIC_CONTA(client) {
 	
 	g_fUlti_Cooldown[client] = (GetGameTime() + 5);
 }
-public CTF_MEDIC_HURTS(client) {
-	
-	g_fContaminate[client] = (GetGameTime() + GetRandomFloat(3.0, 5.0));
-	
-	new String:sound[128];
-	Format(sound, sizeof(sound), "vo/npc/barney/ba_pain0%i.wav", GetRandomInt(1, 9));
-	EmitSoundToAll(sound, client);
-	
+public CTF_MEDIC_HURT(client) {
 	new health = GetClientHealth(client);
 	health -= GetRandomInt(3, 8);
 	
@@ -395,6 +389,21 @@ public CTF_MEDIC_HURTS(client) {
 	else {
 		SetEntityHealth(client, health);
 	}
+}
+public CTF_MEDIC_HURTS(client) {
+	
+	if( g_iPlayerClass[client] == class_medic ) {
+		g_iContaminated[client] = 0;
+		return;
+	}
+	g_fContaminate[client] = (GetGameTime() + GetRandomFloat(3.0, 5.0));
+	
+	new String:sound[128];
+	Format(sound, sizeof(sound), "vo/npc/barney/ba_pain0%i.wav", GetRandomInt(1, 9));
+	EmitSoundToAll(sound, client);
+	
+	CTF_MEDIC_HURT(client);
+	
 	new Float:vecOrigin[3], Float:vecOrigin2[3], Float:vecNull[3];
 	GetClientEyePosition(client, vecOrigin);
 	
@@ -412,6 +421,8 @@ public CTF_MEDIC_HURTS(client) {
 			continue;
 		
 		if( GetClientTeam(client) != GetClientTeam(i) )
+			continue;
+		if( GetClientTeam(g_iContaminated[client]) == GetClientTeam(i) )
 			continue;
 		
 		if( g_iPlayerClass[i] == class_medic )
@@ -438,7 +449,7 @@ public CTF_HWGUY_init(client) {
 }
 public CTF_HWGUY_ulti(client) {
 	
-	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	CTF_PrintToChat(client, "Vous avez utilise votre ultimate!");
 	
 	g_flPlayerSpeed[client] = 170.0;
 	
@@ -450,7 +461,7 @@ public Action:CTF_HWGUY_ulti_Task(Handle:timer, any:client) {
 	
 	g_flPlayerSpeed[client] = 230.0;
 	
-	PrintToChat(client, "Votre ultimate a pris fin!");
+	CTF_PrintToChat(client, "Votre ultimate a pris fin!");
 }
 // ------------------------------------------------------------------------------------------------------------------
 //		Classe: Pyro
@@ -490,7 +501,7 @@ public CTF_SPY_init(client) {
 }
 public CTF_SPY_ulti(client) {
 	
-	PrintToChat(client, "Vous avez utilise votre ultimate!");
+	CTF_PrintToChat(client, "Vous avez utilise votre ultimate!");
 	
 	g_fUlti_Cooldown[client] = (GetGameTime()+60);
 	g_flPlayerSpeed[client] = 350.0;
@@ -523,7 +534,7 @@ public CTF_SPY_ulti(client) {
 public Action:CTF_SPY_ulti_Task(Handle:timer, any:client) {
 	
 	if( g_iPlayerClass[client] == class_spy ) {
-		PrintToChat(client, "Votre ultimate a pris fin!");
+		CTF_PrintToChat(client, "Votre ultimate a pris fin!");
 		g_flPlayerSpeed[client] = 300.0;
 	}
 	
@@ -596,14 +607,14 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 	if( action == MenuAction_Select ) {
 		
 		if( !(GetEntityFlags(client) & FL_ONGROUND) ) {
-			PrintToChat(client, "[CTF] Vous ne pouvez pas construire dans les aires.");
+			CTF_PrintToChat(client, "Vous ne pouvez pas construire dans les aires.");
 			
 			CTF_ENGINEER_ulti(client);
 			return;
 		}
 		if( !IsPlayerAlive(client) ) {
 			
-			PrintToChat(client, "[CTF] Vous devez etre en vie pour construire.");
+			CTF_PrintToChat(client, "Vous devez etre en vie pour construire.");
 			return;
 		}
 		new String:options[64];
@@ -615,7 +626,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 			
 			if( IsValidSentry(g_iBuild[client][build_sentry]) ) {
 				
-				PrintToChat(client, "[CTF] Vous avez deja construit une tourelle.");
+				CTF_PrintToChat(client, "Vous avez deja construit une tourelle.");
 			}
 			else {
 				CTF_SG_Build(client);
@@ -629,17 +640,17 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 			
 			if( !IsValidSentry(g_iBuild[client][build_sentry]) ) {
 				
-				PrintToChat(client, "[CTF] Vous n'avez pas de tourelle.");
+				CTF_PrintToChat(client, "Vous n'avez pas de tourelle.");
 			}
 			else {
 				
 				if( !CTF_IsNear(client, g_iBuild[client][build_sentry]) ) {
 					
-					PrintToChat(client, "[CTF] Vous devez vous raprochez de votre tourelle pour la demonter.");
+					CTF_PrintToChat(client, "Vous devez vous raprochez de votre tourelle pour la demonter.");
 				}
 				else {
 					
-					PrintToChat(client, "[CTF] Demontage en cours...");
+					CTF_PrintToChat(client, "Demontage en cours...");
 					
 					new ent = g_iBuild[client][build_sentry];
 					ServerCommand("sm_effect_fading \"%i\" \"2.0\" \"1\"", ent);
@@ -660,7 +671,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 			
 			if( !IsValidSentry(g_iBuild[client][build_sentry]) || g_flBuildHealth[ g_iBuild[client][build_sentry] ][build_sentry] <= 0.0 ) {
 				
-				PrintToChat(client, "[CTF] Vous n'avez pas de tourelle.");
+				CTF_PrintToChat(client, "Vous n'avez pas de tourelle.");
 			}
 			else {
 				
@@ -672,7 +683,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 				ExplosionDamage(vecStart, 200.0, 200.0, client, g_iBuild[client][build_sentry]);
 				DealDamage(g_iBuild[client][build_sentry], 1000, client);
 				
-				PrintToChat(client, "[CTF] Votre tourelle a ete detruite!");
+				CTF_PrintToChat(client, "Votre tourelle a ete detruite!");
 			}
 			
 			CTF_ENGINEER_ulti(client);
@@ -682,29 +693,29 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 		else if( StrEqual(options, "upg_sg") ) {
 			if( !IsValidSentry(g_iBuild[client][build_sentry]) ) {
 				
-				PrintToChat(client, "[CTF] Vous n'avez pas de tourelle.");
+				CTF_PrintToChat(client, "Vous n'avez pas de tourelle.");
 			}
 			else {
 				
 				if( g_iSentryLevel[ g_iBuild[client][build_sentry] ] != 1 ) {
 					
 					if( g_iSentryLevel[ g_iBuild[client][build_sentry] ] == 2 ) 
-						PrintToChat(client, "[CTF] Votre tourelle est deja amelioree.");
+						CTF_PrintToChat(client, "Votre tourelle est deja amelioree.");
 					else
-						PrintToChat(client, "[CTF] Impossible d'ameliorer votre tourelle pour le moment.");
+						CTF_PrintToChat(client, "Impossible d'ameliorer votre tourelle pour le moment.");
 				}
 				else {
 					if( !CTF_IsNear(client, g_iBuild[client][build_sentry]) ) {
 						
-						PrintToChat(client, "[CTF] Vous devez vous raprochez de votre tourelle pour l'ameliorer.");
+						CTF_PrintToChat(client, "Vous devez vous raprochez de votre tourelle pour l'ameliorer.");
 					}
 					else {
 						
 						if( g_flMetal[client] < 150.0 ) {
-							PrintToChat(client, "[CTF] Vous n'avez pas assez de metal!");
+							CTF_PrintToChat(client, "Vous n'avez pas assez de metal!");
 						}
 						else {
-							PrintToChat(client, "[CTF] Amelioration en cours...");
+							CTF_PrintToChat(client, "Amelioration en cours...");
 							
 							g_flMetal[client] -= 150.0;
 							
@@ -734,7 +745,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 		// 		Construire TP Entrée
 		else if( StrEqual(options, "build_tp1") ) {
 			if( IsValidTeleporter(g_iBuild[client][build_teleporter_in]) ) {
-				PrintToChat(client, "[CTF] Vous avez deja construit un teleporteur.");
+				CTF_PrintToChat(client, "Vous avez deja construit un teleporteur.");
 			}
 			else {
 				CTF_TP_Build(client, build_teleporter_in);
@@ -745,16 +756,16 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 		// 		Demonter TP Entrée
 		else if( StrEqual(options, "dis_tp1") ) {
 			if( !IsValidTeleporter(g_iBuild[client][build_teleporter_in]) ) {
-				PrintToChat(client, "[CTF] Vous n'avez pas de teleporteur.");
+				CTF_PrintToChat(client, "Vous n'avez pas de teleporteur.");
 			}
 			else {
 				
 				if( !CTF_IsNear(client, g_iBuild[client][build_teleporter_in]) ) {
-					PrintToChat(client, "[CTF] Vous devez vous raprochez de votre teleporteur pour le demonter.");
+					CTF_PrintToChat(client, "Vous devez vous raprochez de votre teleporteur pour le demonter.");
 				}
 				else {
 					
-					PrintToChat(client, "[CTF] Demontage en cours...");
+					CTF_PrintToChat(client, "Demontage en cours...");
 					
 					new ent = g_iBuild[client][build_teleporter_in];
 					ServerCommand("sm_effect_fading \"%i\" \"2.0\" \"1\"", ent);
@@ -771,7 +782,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 		// 		Exploser TP Entrée
 		else if( StrEqual(options, "det_tp1") ) {
 			if( !IsValidTeleporter(g_iBuild[client][build_teleporter_in]) ) {
-				PrintToChat(client, "[CTF] Vous n'avez pas de teleporteur.");
+				CTF_PrintToChat(client, "Vous n'avez pas de teleporteur.");
 			}
 			else {
 				
@@ -783,7 +794,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 				ExplosionDamage(vecStart, 100.0, 100.0, client, g_iBuild[client][build_teleporter_in]);
 				DealDamage(g_iBuild[client][build_teleporter_in], 1000, client);
 				
-				PrintToChat(client, "[CTF] Votre teleporteur a ete detruit!");
+				CTF_PrintToChat(client, "Votre teleporteur a ete detruit!");
 			}
 			
 			CTF_ENGINEER_ulti(client);
@@ -792,7 +803,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 		// 		Construire TP Sortie
 		else if( StrEqual(options, "build_tp2") ) {
 			if( IsValidTeleporter(g_iBuild[client][build_teleporter_out]) ) {
-				PrintToChat(client, "[CTF] Vous avez deja construit un teleporteur.");
+				CTF_PrintToChat(client, "Vous avez deja construit un teleporteur.");
 			}
 			else {
 				CTF_TP_Build(client, build_teleporter_out);
@@ -803,16 +814,16 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 		// 		Demonter TP Sortie
 		else if( StrEqual(options, "dis_tp2") ) {
 			if( !IsValidTeleporter(g_iBuild[client][build_teleporter_out]) ) {
-				PrintToChat(client, "[CTF] Vous n'avez pas de teleporteur.");
+				CTF_PrintToChat(client, "Vous n'avez pas de teleporteur.");
 			}
 			else {
 				
 				if( !CTF_IsNear(client, g_iBuild[client][build_teleporter_out]) ) {
-					PrintToChat(client, "[CTF] Vous devez vous raprochez de votre teleporteur pour le demonter.");
+					CTF_PrintToChat(client, "Vous devez vous raprochez de votre teleporteur pour le demonter.");
 				}
 				else {
 					
-					PrintToChat(client, "[CTF] Demontage en cours...");
+					CTF_PrintToChat(client, "Demontage en cours...");
 					
 					new ent = g_iBuild[client][build_teleporter_out];
 					ServerCommand("sm_effect_fading \"%i\" \"2.0\" \"1\"", ent);
@@ -829,7 +840,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 		// 		Exploser TP Sortie
 		else if( StrEqual(options, "det_tp2") ) {
 			if( !IsValidTeleporter(g_iBuild[client][build_teleporter_out]) ) {
-				PrintToChat(client, "[CTF] Vous n'avez pas de teleporteur.");
+				CTF_PrintToChat(client, "Vous n'avez pas de teleporteur.");
 			}
 			else {
 				
@@ -841,7 +852,7 @@ public hMenu_Engineer(Handle:hMenu, MenuAction:action, client, param2) {
 				ExplosionDamage(vecStart, 100.0, 100.0, client, g_iBuild[client][build_teleporter_out]);
 				DealDamage(g_iBuild[client][build_teleporter_out], 1000, client);
 				
-				PrintToChat(client, "[CTF] Votre teleporteur a ete detruit!");
+				CTF_PrintToChat(client, "Votre teleporteur a ete detruit!");
 			}
 			
 			CTF_ENGINEER_ulti(client);
@@ -862,7 +873,7 @@ public Action:CTF_SG_DismountPost(Handle:timer, any:client) {
 		AcceptEntityInput(g_iBuild[client][build_sentry], "Kill");
 		g_iBuild[client][build_sentry] = 0;
 		
-		PrintToChat(client, "[CTF] Votre tourelle a ete demontee!");
+		CTF_PrintToChat(client, "Votre tourelle a ete demontee!");
 	}
 }
 
@@ -880,7 +891,7 @@ public Action:CTF_TP1_DismountPost(Handle:timer, any:client) {
 		AcceptEntityInput(g_iBuild[client][build_teleporter_in], "Kill");
 		g_iBuild[client][build_teleporter_in] = 0;
 		
-		PrintToChat(client, "[CTF] Votre teleporteur a ete demontee!");
+		CTF_PrintToChat(client, "Votre teleporteur a ete demontee!");
 	}
 }
 public Action:CTF_TP2_DismountPost(Handle:timer, any:client) {
@@ -897,7 +908,7 @@ public Action:CTF_TP2_DismountPost(Handle:timer, any:client) {
 		AcceptEntityInput(g_iBuild[client][build_teleporter_out], "Kill");
 		g_iBuild[client][build_teleporter_out] = 0;
 		
-		PrintToChat(client, "[CTF] Votre teleporteur a ete demontee!");
+		CTF_PrintToChat(client, "Votre teleporteur a ete demontee!");
 	}
 }
 public Action:CTF_SG_UpgradeMiddle(Handle:timer, any:client) {
@@ -920,7 +931,7 @@ public Action:CTF_SG_UpgradePost(Handle:timer, any:client) {
 	
 	g_flPlayerSpeed[client] = 300.0;
 	
-	PrintToChat(client, "[CTF] Votre tourelle a ete amelioree avec succes!");
+	CTF_PrintToChat(client, "Votre tourelle a ete amelioree avec succes!");
 }
 // ------------------------------------------------------------------------------------------------------------------
 //		Classe: Civilian
@@ -941,8 +952,8 @@ public CTF_CIVILIAN_init(client) {
 //		Classe: None -> Selection
 //
 public CTF_NONE_init(client) {
-	
 	new String:g_szClass[10][32] = { "Aucune", "Eclaireur", "Sniper", "Soldat", "Artificier", "Infirmier", "Mitrailleur", "Pyroman", "Espion", "Technicien" };
+
 	
 	new Handle:menu = CreateMenu(hMenu_SelectClass);	
 	SetMenuTitle(menu, "CTF: Selectionner votre classe");
@@ -988,6 +999,9 @@ public CTF_NONE_init(client) {
 }
 public hMenu_SelectClass(Handle:hMenu, MenuAction:action, client, param2) {
 	
+	new String:g_szClass[10][32] = { "Aucune", "Eclaireur", "Sniper", "Soldat", "Artificier", "Infirmier", "Mitrailleur", "Pyroman", "Espion", "Technicien" };
+
+	
 	if( action == MenuAction_Select ) {
 		
 		new String:options[64];
@@ -1009,7 +1023,7 @@ public hMenu_SelectClass(Handle:hMenu, MenuAction:action, client, param2) {
 		}
 		
 		if( !(max < 0 || amount<max) ) {
-			PrintToChat(client, "[CTF] Il n'y a plus de place dans cette classe.");
+			CTF_PrintToChat(client, "Il n'y a plus de place dans cette classe (%s).", g_szClass[i]);
 			CTF_NONE_init(client);
 			return;
 		}
@@ -1020,6 +1034,13 @@ public hMenu_SelectClass(Handle:hMenu, MenuAction:action, client, param2) {
 		}
 		g_iPlayerClass[client] = enum_class_type:i;
 		DealDamage(client, (GetClientHealth(client)*100), client);
+		
+		if( GetClientTeam(client) == CS_TEAM_T ) {
+			CTF_PrintToChat(CTF_PRINT_RED, "%N est maintenant: %s", client, g_szClass[i]);
+		}
+		else if( GetClientTeam(client) == CS_TEAM_CT ) {
+			CTF_PrintToChat(CTF_PRINT_BLU, "%N est maintenant: %s", client, g_szClass[i]);
+		}
 		
 		CTF_WEAPON_PIPE_PipeBomb_EXPL(client, true);
 		if( g_iPlayerClass[client] != class_engineer )

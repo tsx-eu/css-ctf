@@ -162,6 +162,10 @@ public Action:CTF_WEAPON_CUSTOM_ACTION(client, &buttons) {
 				
 				CTF_WEAPON_MEDIC_Attack_1(client);
 			}
+			if( (buttons & IN_ATTACK2) && g_fCustomWeapon_NextShoot[client][0] < GetGameTime() ) {
+				
+				CTF_WEAPON_MEDIC_Attack_2(client);
+			}
 		}
 	}
 	if( g_iPlayerClass[client] == class_pyro ) {
@@ -624,11 +628,93 @@ public CTF_WEAPON_MEDIC_Attack_1(client) {
 		if( !IsValidClient(Nearest_target) )
 			continue;
 		
-		CTF_WEAPON_MEDIC_link(client, Nearest_target);
+		
+		if( GetRandomInt(1, 2) == 2 ) {
+			g_iCustomWeapon_Ammo[client][0]--;
+		}
+		
+		if( g_iCustomWeapon_Ammo[client][0] <= 0 ) {
+			
+			CTF_WEAPON_FLAME_Reload(client);
+		}
+		CTF_WEAPON_MEDIC_link(client, Nearest_target, false);
 		break;
 	}
 }
-public CTF_WEAPON_MEDIC_link(client, target) {
+
+public CTF_WEAPON_MEDIC_Attack_2(client) {
+	
+	g_fCustomWeapon_NextShoot[client][0] = (GetGameTime() + 0.2);
+	
+	if( IsValidClient(g_iCustomWeapon_Entity2[client][2] ) ) {
+		
+		new target = g_iCustomWeapon_Entity2[client][2];
+		
+		if( GetClientTeam(target) != GetClientTeam(client) )
+			return;
+		
+		CTF_MEDIC_HURT(target);
+		
+		new health = GetClientHealth(client) + GetRandomInt(2, 3);
+		new max = Entity_GetMaxHealth(client);
+		if( max >= health ) {
+			health = max;
+		}
+		
+		SetEntityHealth(client, health);
+		
+		g_iContaminated[target] = client;
+		return;
+	}
+	
+	new Float:vecOrigin[3], Float:vecAngles[3], Float:vecTarget[3], Float:dist = 0.0;
+	
+	GetClientEyePosition(client, vecOrigin);
+	GetClientEyeAngles(client, vecAngles);
+	
+	while( dist<HEAL_DIST ) {
+		dist += 10.0;
+		
+		vecTarget[0] = (vecOrigin[0] + (dist * Cosine(degrees_to_radians(vecAngles[1]))) );
+		vecTarget[1] = (vecOrigin[1] + (dist * Sine(degrees_to_radians(vecAngles[1]))) );
+		vecTarget[2] = (vecOrigin[2] + (-dist * Sine(degrees_to_radians(vecAngles[0]))) );
+		
+		new Float:Nearest_dist = (dist*2.0), Nearest_target = -1;
+		
+		for(new i=1; i<=GetMaxClients(); i++) {
+			if( !IsValidClient(i) )
+				continue;
+			if( !IsPlayerAlive(i) )
+				continue;
+			if( client == i )
+				continue;
+			if( GetClientTeam(i) == GetClientTeam(client) )
+				continue;
+			
+			new Float:vecOrigin2[3], Float:fDist;
+			GetClientEyePosition(i, vecOrigin2);
+			
+			fDist = GetVectorDistance(vecTarget, vecOrigin2);
+			
+			if( fDist >= HEAL_DIST )
+				continue;
+			
+			if( fDist < Nearest_dist ) {
+				
+				Nearest_dist = fDist;
+				Nearest_target = i;
+			}
+		}
+		
+		if( !IsValidClient(Nearest_target) )
+			continue;
+		
+		CTF_WEAPON_MEDIC_link(client, Nearest_target, true);
+		
+		break;
+	}
+}
+stock CTF_WEAPON_MEDIC_link(client, target, reverse=false) {
 	
 	new Float:vecOrigin[3], Float:vecAngles[3], Float:vecTarget[3], String:ParentName[64];
 	GetClientAbsOrigin(client, vecOrigin);
@@ -666,15 +752,31 @@ public CTF_WEAPON_MEDIC_link(client, target) {
 				return;
 			
 			Format(ParentName, sizeof(ParentName), "ctf_link_2_%i%i%i", client, target, GetRandomInt(11111, 99999) );
-			DispatchKeyValue(target, "targetname", ParentName);
-			SetVariantString(ParentName);
-			AcceptEntityInput(g_iCustomWeapon_Entity2[client][1], "SetParent");
 			
-			vecOrigin[0] = 0.0;
-			vecOrigin[1] = 0.0;
-			vecOrigin[2] = 50.0;
+			if( reverse ) {
+				DispatchKeyValue(target, "targetname", ParentName);
+				SetVariantString(ParentName);
+				AcceptEntityInput(g_iCustomWeapon_Entity2[client][0], "SetParent");
+				
+				vecOrigin[0] = 0.0;
+				vecOrigin[1] = 0.0;
+				vecOrigin[2] = 50.0;
+				
+				TeleportEntity(g_iCustomWeapon_Entity2[client][0], vecOrigin, NULL_VECTOR, NULL_VECTOR);
+			}
+			else {
+				DispatchKeyValue(target, "targetname", ParentName);
+				SetVariantString(ParentName);
+				AcceptEntityInput(g_iCustomWeapon_Entity2[client][1], "SetParent");
+				
+				vecOrigin[0] = 0.0;
+				vecOrigin[1] = 0.0;
+				vecOrigin[2] = 50.0;
+				
+				TeleportEntity(g_iCustomWeapon_Entity2[client][1], vecOrigin, NULL_VECTOR, NULL_VECTOR);
+			}
 			
-			TeleportEntity(g_iCustomWeapon_Entity2[client][1], vecOrigin, NULL_VECTOR, NULL_VECTOR);
+			
 			
 			g_iCustomWeapon_Entity2[client][2] = target;
 			return;
@@ -692,53 +794,93 @@ public CTF_WEAPON_MEDIC_link(client, target) {
 	}
 	
 	new ent = CreateEntityByName("info_particle_system");
-	if( GetClientTeam(client) == CS_TEAM_T ) {
-		DispatchKeyValue(ent, "effect_name", "medicgun_beam_red");
+	
+	if( reverse ) {
+		if( GetClientTeam(client) == CS_TEAM_CT ) {
+			DispatchKeyValue(ent, "effect_name", "medicgun_beam_red");
+		}
+		else {
+			DispatchKeyValue(ent, "effect_name", "medicgun_beam_blue");
+		}
+		
+		DispatchKeyValue(ent, "classname", ParentName);
+		DispatchKeyValue(ent, "start_active", "1");
+		
+		Format(ParentName, sizeof(ParentName), "ctf_link_1_%i%i%i", client, target, GetRandomInt(11111, 99999) );
+		
+		new ent2 = CreateEntityByName("env_sprite");
+		DispatchSpawn(ent2);
+		
+		DispatchKeyValue(client, "targetname", ParentName);
+		DispatchKeyValue(ent, "cpoint1", ParentName);
+		
+		DispatchSpawn(ent);
+		TeleportEntity(ent, vecOrigin, vecAngles, NULL_VECTOR);
+		TeleportEntity(ent2, vecOrigin, NULL_VECTOR, NULL_VECTOR);
+		
+		SetVariantString(ParentName);
+		AcceptEntityInput(ent2, "SetParent");
+		SetVariantString(ParentName);
+		AcceptEntityInput(ent, "SetParent");
+		
+		vecOrigin[0] = 0.0;
+		vecOrigin[1] = 0.0;
+		vecOrigin[2] = 50.0;
+		
+		TeleportEntity(ent, vecOrigin, NULL_VECTOR, NULL_VECTOR);
+		TeleportEntity(ent2, vecOrigin, NULL_VECTOR, NULL_VECTOR);
+		ActivateEntity(ent);
+		
+		g_iCustomWeapon_Entity2[client][0] = ent;
+		g_iCustomWeapon_Entity2[client][1] = ent2;
 	}
 	else {
-		DispatchKeyValue(ent, "effect_name", "medicgun_beam_blue");
+		if( GetClientTeam(client) == CS_TEAM_T ) {
+			DispatchKeyValue(ent, "effect_name", "medicgun_beam_red");
+		}
+		else {
+			DispatchKeyValue(ent, "effect_name", "medicgun_beam_blue");
+		}
+		
+		DispatchKeyValue(ent, "classname", ParentName);
+		DispatchKeyValue(ent, "start_active", "1");
+		
+		Format(ParentName, sizeof(ParentName), "ctf_link_1_%i%i%i", client, target, GetRandomInt(11111, 99999) );
+		
+		new ent2 = CreateEntityByName("env_sprite");
+		DispatchSpawn(ent2);
+		
+		DispatchKeyValue(ent2, "targetname", ParentName);
+		DispatchKeyValue(ent, "cpoint1", ParentName);
+		
+		DispatchSpawn(ent);
+		TeleportEntity(ent, vecOrigin, vecAngles, NULL_VECTOR);
+		
+		TeleportEntity(ent2, vecTarget, NULL_VECTOR, NULL_VECTOR);
+		Format(ParentName, sizeof(ParentName), "ctf_link_2_%i%i%i", client, target, GetRandomInt(11111, 99999) );
+		DispatchKeyValue(target, "targetname", ParentName);
+		SetVariantString(ParentName);
+		AcceptEntityInput(ent2, "SetParent");
+		
+		Format(ParentName, sizeof(ParentName), "ctf_link_3_%i%i%i", client, target, GetRandomInt(11111, 99999) );
+		DispatchKeyValue(client, "targetname", ParentName);
+		SetVariantString(ParentName);
+		AcceptEntityInput(ent, "SetParent");
+		
+		vecOrigin[0] = 0.0;
+		vecOrigin[1] = 0.0;
+		vecOrigin[2] = 50.0;
+		
+		TeleportEntity(ent, vecOrigin, NULL_VECTOR, NULL_VECTOR);
+		TeleportEntity(ent2, vecOrigin, NULL_VECTOR, NULL_VECTOR);
+		ActivateEntity(ent);
+		
+		g_iCustomWeapon_Entity2[client][0] = ent;
+		g_iCustomWeapon_Entity2[client][1] = ent2;
 	}
 	
-	DispatchSpawn(ent);
-	
-	TeleportEntity(ent, vecOrigin, vecAngles, NULL_VECTOR);
-	
-	DispatchKeyValue(ent, "classname", ParentName);
-	DispatchKeyValue(ent, "start_active", "1");
-	
-	Format(ParentName, sizeof(ParentName), "ctf_link_1_%i%i%i", client, target, GetRandomInt(11111, 99999) );
-	
-	new ent2 = CreateEntityByName("env_sprite");
-	DispatchSpawn(ent2);
-	
-	DispatchKeyValue(ent2, "targetname", ParentName);
-	
-	DispatchKeyValue(ent, "cpoint1", ParentName);
-	TeleportEntity(ent2, vecTarget, NULL_VECTOR, NULL_VECTOR);
-	Format(ParentName, sizeof(ParentName), "ctf_link_2_%i%i%i", client, target, GetRandomInt(11111, 99999) );
-	DispatchKeyValue(target, "targetname", ParentName);
-	SetVariantString(ParentName);
-	AcceptEntityInput(ent2, "SetParent");
-	
-	Format(ParentName, sizeof(ParentName), "ctf_link_3_%i%i%i", client, target, GetRandomInt(11111, 99999) );
-	DispatchKeyValue(client, "targetname", ParentName);
-	SetVariantString(ParentName);
-	AcceptEntityInput(ent, "SetParent");
-	
-	vecOrigin[0] = 0.0;
-	vecOrigin[1] = 0.0;
-	vecOrigin[2] = 50.0;
-	
-	TeleportEntity(ent, vecOrigin, NULL_VECTOR, NULL_VECTOR);
-	TeleportEntity(ent2, vecOrigin, NULL_VECTOR, NULL_VECTOR);
-	ActivateEntity(ent);
-	
-	g_iCustomWeapon_Entity2[client][0] = ent;
-	g_iCustomWeapon_Entity2[client][1] = ent2;
-	
-	CTF_WEAPON_MEDIC_link(client, target);
+	CTF_WEAPON_MEDIC_link(client, target, reverse);
 }
-
 // ------------------------------------------------------------------------------------------------------------------
 //		Custom Weapon - FLAME THROWER
 //
@@ -752,10 +894,13 @@ public CTF_WEAPON_FLAME_Attack_1(client) {
 	else {
 		
 		CTF_WEAPON_FLAME_Fire(client, false);
-		g_iCustomWeapon_Ammo[client][0]--;
 		
-		g_fCustomWeapon_NextShoot[client][0] = (GetGameTime() + 0.075);
-		g_fCustomWeapon_NextShoot[client][2] = (GetGameTime() + 0.075);
+		if( GetRandomInt(1, 2) == 2 ) {
+			g_iCustomWeapon_Ammo[client][0]--;
+		}
+		
+		g_fCustomWeapon_NextShoot[client][0] = (GetGameTime() + 0.05);
+		g_fCustomWeapon_NextShoot[client][2] = (GetGameTime() + 0.05);
 		
 		if( g_iCustomWeapon_Ammo[client][0] <= 0 ) {
 			
@@ -830,7 +975,13 @@ public CTF_WEAPON_FLAME_Fire(client, shutdown) {
 		SetEntProp(ent, Prop_Data, "m_MoveCollide", 0);
 		
 		GetAngleVectors(vecAngles, vecVelocity, NULL_VECTOR, NULL_VECTOR);
-		ScaleVector(vecVelocity, 800.0);
+		ScaleVector(vecVelocity, 1000.0);
+		
+		new Float:vecClientVelocity[3];
+		GetEntPropVector(client, Prop_Data, "m_vecVelocity", vecClientVelocity);
+		vecVelocity[0] += vecClientVelocity[0] * 2.0;
+		vecVelocity[1] += vecClientVelocity[1] * 2.0;
+		vecVelocity[2] += vecClientVelocity[2] * 2.0;
 		
 		TeleportEntity(ent, vecOrigin, vecAngles, vecVelocity);
 		Colorize(ent, 0, 0, 0, 0);

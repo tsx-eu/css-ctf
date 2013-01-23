@@ -97,11 +97,11 @@ public CTF_SG_Build(client) {
 	
 	
 	if( g_flMetal[client] < 150.0 ) {
-		PrintToChat(client, "[CTF] Vous n'avez pas assez de metal!");
+		CTF_PrintToChat(client, "Vous n'avez pas assez de metal!");
 		return;
 	}
 	if(! (GetEntityFlags(client) & FL_ONGROUND) ) {
-		PrintToChat(client, "[CTF] Impossible de construire dans les aires");
+		CTF_PrintToChat(client, "Impossible de construire dans les aires");
 		return;
 	}
 	
@@ -124,7 +124,7 @@ public CTF_SG_Build(client) {
 				
 				new Float:dist = GetVectorDistance(vecOrigin, vecFlag, false);
 				if( dist <= 64.0 ) {
-					PrintToChat(client, "[CTF] Impossible de construire aussi pres du drapeau.");
+					CTF_PrintToChat(client, "Impossible de construire aussi pres du drapeau.");
 					return;
 				}
 			}
@@ -175,7 +175,7 @@ public CTF_SG_Build(client) {
 		TE_SendToClient(client);
 		
 		g_flMetal[client] += 150.0;
-		PrintToChat(client, "[CTF] Impossible de construire ici.");
+		CTF_PrintToChat(client, "Impossible de construire ici.");
 		AcceptEntityInput(ent, "Kill");
 		
 		CloseHandle(trace);
@@ -184,7 +184,7 @@ public CTF_SG_Build(client) {
 	CloseHandle(trace);
 	vecOrigin[2] -= 1.0;
 	
-	PrintToChat(client, "[CTF] Construction en cours...");
+	CTF_PrintToChat(client, "Construction en cours...");
 	
 	if( GetClientTeam(client) == CS_TEAM_CT ) {
 		Colorize(ent, 0, 0, 255, 0);
@@ -212,7 +212,6 @@ public CTF_SG_Build(client) {
 	
 	SDKHook(ent, SDKHook_OnTakeDamage,	OnTakeDamage);
 	
-	
 	SetEntProp(ent, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PLAYER);
 	SetEntProp(ent, Prop_Data, "m_nSolidType", SOLID_VPHYSICS);
 	SetEntProp(ent, Prop_Send, "m_usSolidFlags", FSOLID_VOLUME_CONTENTS);
@@ -227,7 +226,7 @@ public Action:CTF_SG_BuildPost(Handle:timer, any:client) {
 		ServerCommand("sm_effect_fading \"%i\" \"0.5\" \"1\"", ent);
 		SheduleEntityInput(ent, 0.5, "Kill");
 		
-		PrintToChat(client, "[CTF] La construction a ete interompue.");
+		CTF_PrintToChat(client, "La construction a ete interompue.");
 		CTF_ENGINEER_ulti(client);
 		return;
 	}
@@ -235,7 +234,7 @@ public Action:CTF_SG_BuildPost(Handle:timer, any:client) {
 	
 	g_flPlayerSpeed[client] = 300.0;
 	CTF_ENGINEER_ulti(client);
-	PrintToChat(client, "[CTF] Votre tourelle a ete construite!");
+	CTF_PrintToChat(client, "Votre tourelle a ete construite!");
 }
 public CTF_SG_FindTarget(client, ent) {
 	
@@ -492,7 +491,7 @@ public CTF_TP_Build(client, build_teleporter) {
 	}
 	
 	if( g_flMetal[client] < 120.0 ) {
-		PrintToChat(client, "[CTF] Vous n'avez pas assez de metal!");
+		CTF_PrintToChat(client, "Vous n'avez pas assez de metal!");
 		return;
 	}
 	
@@ -551,7 +550,7 @@ public CTF_TP_Build(client, build_teleporter) {
 		TE_SendToClient(client);
 		
 		g_flMetal[client] += 120.0;
-		PrintToChat(client, "[CTF] Impossible de construire ici.");
+		CTF_PrintToChat(client, "Impossible de construire ici.");
 		AcceptEntityInput(ent, "Kill");
 		
 		CloseHandle(trace);
@@ -610,14 +609,14 @@ public Action:CTF_TP_BuildPost(Handle:timer, any:client) {
 		ServerCommand("sm_effect_fading \"%i\" \"0.5\" \"1\"", ent);
 		SheduleEntityInput(ent, 0.5, "Kill");
 		
-		PrintToChat(client, "[CTF] La construction a ete interompue.");
+		CTF_PrintToChat(client, "La construction a ete interompue.");
 		CTF_ENGINEER_ulti(client);
 		return;
 	}
 	g_flPlayerSpeed[client] = 300.0;
 	
 	CTF_ENGINEER_ulti(client);
-	PrintToChat(client, "[CTF] Votre teleporteur a ete construit!");
+	CTF_PrintToChat(client, "Votre teleporteur a ete construit!");
 }
 public Action:CTF_TP_BuildPost2(Handle:timer, any:client) {
 	
@@ -629,13 +628,13 @@ public Action:CTF_TP_BuildPost2(Handle:timer, any:client) {
 		ServerCommand("sm_effect_fading \"%i\" \"0.5\" \"1\"", ent);
 		SheduleEntityInput(ent, 0.5, "Kill");
 		
-		PrintToChat(client, "[CTF] La construction a ete interompue.");
+		CTF_PrintToChat(client, "La construction a ete interompue.");
 		CTF_ENGINEER_ulti(client);
 		return;
 	}
 	g_flPlayerSpeed[client] = 300.0;
 	CTF_ENGINEER_ulti(client);
-	PrintToChat(client, "[CTF] Votre teleporteur a ete construit!");
+	CTF_PrintToChat(client, "Votre teleporteur a ete construit!");
 }
 public CTF_TP_Links(client) {
 	
