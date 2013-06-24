@@ -808,9 +808,7 @@ public CTF_SpawnBackPack() {
 			DispatchKeyValue(ent, "model", "models/items/ammocrate_grenade.mdl");
 		}
 		
-		SetEntProp(ent, Prop_Data, "m_nSolidType", 6 );
 		SetEntProp(ent, Prop_Send, "m_nSolidType", 6 );
-		SetEntProp(ent, Prop_Data, "m_CollisionGroup", 5);
 		SetEntProp(ent, Prop_Send, "m_CollisionGroup", 5);
 		SetEntityMoveType(ent, MOVETYPE_VPHYSICS);
 		
